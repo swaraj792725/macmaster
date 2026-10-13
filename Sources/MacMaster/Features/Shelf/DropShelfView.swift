@@ -20,6 +20,13 @@ struct DropShelfView: View {
                 }
             }
 
+            GroupedSection("Menu bar", footer: "Click the icon to see what is parked and drag items back out. Drop files, images or text on it to add them. Right-click for more.") {
+                SettingsRow(title: "Show in menu bar", subtitle: "Item count badge, popover and drop target",
+                            symbol: "menubar.rectangle", colors: Theme.Palette.teal) {
+                    Toggle("", isOn: $settings.showInMenuBar).labelsHidden().toggleStyle(.switch)
+                }
+            }
+
             GroupedSection("Open the shelf") {
                 SettingsRow(title: "Shake to open", subtitle: "Wiggle a dragged file left and right",
                             symbol: "hand.draw.fill", colors: Theme.Palette.blue) {

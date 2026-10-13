@@ -30,12 +30,12 @@ final class MenuBarManager {
     static var openSettingsHandler: (() -> Void)?
 
     // MARK: Published state
-    private(set) var isCollapsed = false
+    var isCollapsed = false
     private(set) var items: [MenuBarManagerItem] = []
     private(set) var hiddenCount = 0
     /// Visible-section items that are clipped by the notch / pushed off the bar.
     private(set) var notchClippedCount = 0
-    private(set) var isRunning = false
+    var isRunning = false
     /// Last action outcome ("Moved X to Hidden", failures...). Shown in the UI.
     var statusMessage: String?
     /// Why a collapse was refused (toggle would be pushed off-screen, divider on the wrong side...).

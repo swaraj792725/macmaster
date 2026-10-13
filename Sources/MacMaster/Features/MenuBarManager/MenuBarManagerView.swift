@@ -4,11 +4,15 @@ import SwiftUI
 struct MenuBarManagerView: View {
     private let manager = MenuBarManager.shared
     @AppStorage(MenuBarManagerPrefs.enabledKey) private var enabled = true
+    @AppStorage(MenuBarManagerPrefs.modeKey) private var modeRaw = MenuBarManagerMode.dropdown.rawValue
+
+    private var mode: MenuBarManagerMode { MenuBarManagerMode(rawValue: modeRaw) ?? .dropdown }
 
     var body: some View {
         Page {
             PageHeader(title: "Menu Bar Manager",
-                       subtitle: "Hide, reorder and reveal menu bar icons",
+                       subtitle: mode == .dropdown ? "List and open every menu bar icon from one dropdown"
+                                                   : "Hide, reorder and reveal menu bar icons",
                        symbol: "menubar.rectangle",
                        colors: [Color(hex: 0x7D7AFF), Color(hex: 0x30B0C7)]) {
                 Toggle("Enabled", isOn: $enabled)
@@ -20,14 +24,23 @@ struct MenuBarManagerView: View {
             }
 
             if enabled {
-                MenuBarManagerHero()
-                MenuBarManagerPermissionNotes()
-                MenuBarManagerArrangeCard()
-                MenuBarManagerInventory()
-                MenuBarManagerBehaviourGroup()
-                MenuBarManagerDropdownGroup()
-                MenuBarManagerSpacingGroup()
-                MenuBarManagerAppearanceGroup()
+                MenuBarManagerModePicker(modeRaw: $modeRaw)
+                if mode == .dropdown {
+                    MenuBarManagerDropdownHero()
+                    MenuBarManagerPermissionNotes(dropdownMode: true)
+                    MenuBarManagerZonesView()
+                    MenuBarManagerDropdownBehaviourGroup()
+                    MenuBarManagerSpacingGroup()
+                    MenuBarManagerAppearanceGroup(classic: false)
+                } else {
+                    MenuBarManagerHero()
+                    MenuBarManagerPermissionNotes(dropdownMode: false)
+                    MenuBarManagerZonesView()
+                    MenuBarManagerBehaviourGroup()
+                    MenuBarManagerDropdownGroup()
+                    MenuBarManagerSpacingGroup()
+                    MenuBarManagerAppearanceGroup(classic: true)
+                }
             } else {
                 EmptyStateView(symbol: "menubar.rectangle", title: "Menu Bar Manager is off",
                                message: "Turn it on to get a toggle and dividers in the menu bar and to hide icons you rarely need.")
@@ -35,6 +48,7 @@ struct MenuBarManagerView: View {
             }
         }
         .animation(.smooth(duration: 0.3), value: enabled)
+        .animation(.smooth(duration: 0.3), value: modeRaw)
         .onAppear { manager.beginObserving() }
         .onDisappear { manager.endObserving() }
     }
@@ -97,9 +111,6 @@ private struct MenuBarManagerHero: View {
                 note("macbook", "\(manager.notchClippedCount) icon\(manager.notchClippedCount == 1 ? " is" : "s are") hidden behind the notch. Hide a few icons or remove some to make room.",
                      color: Theme.Palette.red[1])
             }
-            if let m = manager.statusMessage {
-                note("info.circle.fill", m, color: .secondary)
-            }
         }
         .card(padding: 18, kind: .glass, radius: Theme.Radius.hero)
         .animation(.smooth(duration: 0.3), value: manager.notchClippedCount)
@@ -130,219 +141,116 @@ private struct MenuBarManagerHero: View {
 // MARK: - Permissions
 
 private struct MenuBarManagerPermissionNotes: View {
+    let dropdownMode: Bool
+
     var body: some View {
         VStack(spacing: 10) {
             PermissionBanner(permission: .accessibility,
-                             reason: "Needed to move icons between sections and to open hidden icons' menus from the dropdown bar.")
+                             reason: dropdownMode
+                                 ? "Needed to list every menu bar item (macOS only exposes them this way) and to open an item's menu from the dropdown."
+                                 : "Needed to move icons between sections and to open hidden icons' menus from the dropdown bar.")
             PermissionBanner(permission: .screenRecording,
-                             reason: "Needed to show the real icon images in the dropdown bar. Without it you get app icons and names.")
+                             reason: dropdownMode
+                                 ? "Needed to show each item's real icon image. Without it the dropdown shows app icons and names."
+                                 : "Needed to show the real icon images in the dropdown bar. Without it you get app icons and names.")
         }
     }
 }
 
-// MARK: - Arrange illustration
 
-private struct MenuBarManagerArrangeCard: View {
+// MARK: - Mode picker
+
+/// Two tiles at the top of the page, one line of explanation each. Writing the pref restarts the manager in that mode.
+private struct MenuBarManagerModePicker: View {
+    @Binding var modeRaw: String
+
     var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ForEach(MenuBarManagerMode.allCases) { m in tile(m) }
+        }
+    }
+
+    private func tile(_ m: MenuBarManagerMode) -> some View {
+        let selected = modeRaw == m.rawValue
+        return Button {
+            withAnimation(.smooth(duration: 0.25)) { modeRaw = m.rawValue }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: m.symbol).font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selected ? Color.accentColor : .secondary)
+                    Text(m.title).font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 0)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary.opacity(0.5))
+                }
+                Text(m.summary).font(.caption).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(selected ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.04)))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.08), lineWidth: selected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Dropdown mode: hero
+
+private struct MenuBarManagerDropdownHero: View {
+    private let manager = MenuBarManager.shared
+
+    var body: some View {
+        let needsAX = manager.inventoryNeedsAccessibility
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "hand.draw").foregroundStyle(.secondary)
-                Text("Arrange").font(.system(size: 15, weight: .semibold))
-            }
-
-            HStack(alignment: .top, spacing: 0) {
-                column("Always hidden", color: Theme.Palette.purple[1], symbols: ["lock.fill", "bolt.horizontal", "cloud"])
-                dividerColumn(dashed: true)
-                column("Hidden", color: Theme.Palette.orange[1], symbols: ["wifi", "speaker.wave.2", "moon"])
-                dividerColumn(dashed: false)
-                chevronColumn
-                column("Visible", color: Theme.Palette.green[1], symbols: ["battery.100", "magnifyingglass", "clock"])
-            }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: 0x3A3C46), Color(hex: 0x24262D)], startPoint: .top, endPoint: .bottom)))
-            .environment(\.colorScheme, .dark)
-
-            VStack(alignment: .leading, spacing: 4) {
-                step("1", "Hold ⌘ and drag an icon in the menu bar across the | divider to hide it.")
-                step("2", "Drag it back to the right of the | to show it again.")
-                step("3", "Click the arrow to collapse. Hidden icons slide out of the bar; Option-click reveals the always-hidden ones.")
-            }
-            .font(.callout).foregroundStyle(.secondary)
-        }
-        .card()
-    }
-
-    private func column(_ label: String, color: Color, symbols: [String]) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 6) {
-                ForEach(symbols, id: \.self) { s in
-                    Image(systemName: SymbolKit.resolve(s))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.9))
-                        .frame(width: 24, height: 22)
-                        .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(color.opacity(0.35)))
-                }
-            }
-            Text(label).font(.system(size: 10, weight: .semibold)).foregroundStyle(color)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func dividerColumn(dashed: Bool) -> some View {
-        VStack(spacing: 8) {
-            VStack(spacing: 2) {
-                ForEach(0..<(dashed ? 4 : 1), id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 0.75, style: .continuous)
-                        .fill(.white.opacity(0.75))
-                        .frame(width: 1.5, height: dashed ? 4 : 22)
-                }
-            }
-            .frame(height: 22)
-            Text(" ").font(.system(size: 10))
-        }
-        .padding(.horizontal, 6)
-    }
-
-    private var chevronColumn: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-            Text("Toggle").font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.6))
-        }
-        .padding(.horizontal, 6)
-    }
-
-    private func step(_ n: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(n).font(.system(size: 11, weight: .bold, design: .rounded))
-                .frame(width: 18, height: 18)
-                .background(Circle().fill(Color.primary.opacity(0.08)))
-            Text(text).fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
-// MARK: - Inventory
-
-private struct MenuBarManagerInventory: View {
-    private let manager = MenuBarManager.shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.spacing) {
-            ForEach(MenuBarManagerSection.allCases) { section in
-                if manager.inventoryNeedsAccessibility && manager.items.isEmpty { EmptyView() }
-                else if section == .alwaysHidden && !manager.alwaysHiddenEnabled { EmptyView() }
-                else { sectionView(section) }
-            }
-            if manager.items.isEmpty {
-                if manager.inventoryNeedsAccessibility {
-                    EmptyStateView(symbol: "lock.shield", title: "Grant Accessibility to list icons",
-                                   message: "macOS 26 and later only expose menu bar icons through Accessibility. Grant it above, then icons appear here.")
-                        .card()
-                } else {
-                    EmptyStateView(symbol: "menubar.arrow.up.rectangle", title: "Scanning the menu bar…",
-                                   message: "Icons from other apps will be listed here.")
-                        .card()
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func sectionView(_ section: MenuBarManagerSection) -> some View {
-        let rows = manager.items(in: section)
-        GroupedSection("\(section.title) · \(rows.count)", symbol: section.symbol, footer: footer(section)) {
-            if rows.isEmpty {
-                Text(emptyText(section)).font(.callout).foregroundStyle(.secondary)
-            } else {
-                ForEach(rows) { MenuBarManagerItemRow(item: $0) }
-            }
-        }
-    }
-
-    private func emptyText(_ s: MenuBarManagerSection) -> String {
-        switch s {
-        case .visible: "No icons are in the visible section."
-        case .hidden: "Nothing hidden yet. ⌘-drag an icon to the left of the | divider, or use the row menu."
-        case .alwaysHidden: "Nothing here. Always-hidden icons only show in the dropdown bar or with Option-click."
-        }
-    }
-
-    private func footer(_ s: MenuBarManagerSection) -> String? {
-        guard s == .visible else { return nil }
-        return "Use a row's menu to move an icon. Moving simulates a ⌘-drag and needs Accessibility."
-    }
-}
-
-private struct MenuBarManagerItemRow: View {
-    let item: MenuBarManagerItem
-    private let manager = MenuBarManager.shared
-
-    var body: some View {
-        let busy = manager.busyItemID == item.id
-        HStack(spacing: 12) {
-            Group {
-                if let icon = item.icon {
-                    Image(nsImage: icon).resizable().scaledToFit()
-                } else {
-                    Image(systemName: "app.dashed").resizable().scaledToFit().foregroundStyle(.tertiary)
-                }
-            }
-            .frame(width: 26, height: 26)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.displayName).font(.body).lineLimit(1)
-                if item.isClipped {
-                    Text("Behind the notch").font(.caption).foregroundStyle(Theme.Palette.red[1])
-                } else if item.isOffscreen && item.section == .visible {
-                    Text("Off the bar").font(.caption).foregroundStyle(Theme.Palette.red[1])
-                } else if !item.title.isEmpty, item.title != item.displayName {
-                    Text(item.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            Spacer(minLength: 8)
-            preview
-            if busy { ProgressView().controlSize(.small) }
-            Menu {
-                ForEach(MenuBarManagerSection.allCases) { target in
-                    if target != .alwaysHidden || manager.alwaysHiddenEnabled {
-                        Button {
-                            Task { await manager.move(item, to: target) }
-                        } label: {
-                            Label("Move to \(target.title)", systemImage: target.symbol)
-                        }
-                        .disabled(target == item.section)
+            HStack(alignment: .center, spacing: 28) {
+                counter("In the bar", manager.dropdownVisibleCount, Theme.Palette.green[1], unknown: needsAX)
+                counter("Not showing", manager.dropdownNotShowingCount, Theme.Palette.orange[1], unknown: needsAX)
+                counter("In the « panel", manager.dropdownOverflowCount, Theme.Palette.indigo[1])
+                Spacer(minLength: 12)
+                Button {
+                    manager.openDropdown()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.down").font(.system(size: 15, weight: .bold))
+                        Text("Open Dropdown").font(.system(size: 16, weight: .semibold, design: .rounded))
                     }
+                    .padding(.horizontal, 12).padding(.vertical, 6)
                 }
-                Divider()
-                Button { Task { await manager.activate(item) } } label: {
-                    Label("Open Its Menu", systemImage: "cursorarrow.click")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle").font(.system(size: 16)).foregroundStyle(.secondary)
+                .buttonStyle(.mmPrimary(tint: Theme.Palette.indigo[1]))
+                .disabled(!manager.isRunning || manager.runningMode != .dropdown)
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .disabled(manager.isMoving || manager.busyItemID != nil)
+            if needsAX {
+                note("lock.shield.fill", "Grant Accessibility to list menu bar items.", color: Theme.Palette.orange[1])
+            }
+            if manager.dropdownNotShowingCount > 0 {
+                note("macbook", "\(manager.dropdownNotShowingCount) item\(manager.dropdownNotShowingCount == 1 ? " is" : "s are") not showing in your menu bar (behind the notch or dropped by macOS). They are still listed in the dropdown and can be opened from there.",
+                     color: Theme.Palette.orange[1])
+            }
+            note("hand.raised.fill", "Nothing in your menu bar is hidden, resized or moved by this mode.", color: Theme.Palette.green[1])
         }
-        .frame(minHeight: 30)
+        .card(padding: 18, kind: .glass, radius: Theme.Radius.hero)
     }
 
-    @ViewBuilder
-    private var preview: some View {
-        let _ = manager.captureVersion
-        if let cap = MenuBarManagerCapture.shared.image(for: item) {
-            Image(nsImage: cap.image)
-                .renderingMode(cap.isMonochrome ? .template : .original)
-                .resizable().scaledToFit()
-                .foregroundStyle(.primary)
-                .frame(height: 20)
-                .frame(maxWidth: 70)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    private func counter(_ title: String, _ value: Int, _ color: Color, unknown: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(unknown ? "–" : "\(value)")
+                .font(.system(size: 44, weight: .bold, design: .rounded))
+                .foregroundStyle(color).monospacedDigit()
+                .contentTransition(.numericText()).animation(.smooth, value: value)
+            Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func note(_ symbol: String, _ text: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(color)
+            Text(text).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
     }
 }

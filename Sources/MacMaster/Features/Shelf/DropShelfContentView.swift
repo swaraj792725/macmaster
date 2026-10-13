@@ -40,6 +40,11 @@ struct DropShelfContentView: View {
                     .background(Capsule().fill(Color.accentColor))
             }
             Spacer()
+            Button { if !DropShelf.shared.addFromPasteboard() { NSSound.beep() } } label: {
+                Image(systemName: "doc.on.clipboard").font(.system(size: 11, weight: .semibold))
+            }
+            .buttonStyle(DropShelfIconButtonStyle(size: 22))
+            .help("Paste from clipboard (files, image or text)")
             Button { controller.hide() } label: {
                 Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
             }

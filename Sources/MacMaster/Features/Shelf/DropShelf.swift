@@ -7,7 +7,7 @@ final class DropShelf {
     static let shared = DropShelf()
 
     private let settings = DropShelfSettings.shared
-    private let model = DropShelfModel()
+    let model = DropShelfModel()
     private let monitor = DropShelfDragMonitor()
     private lazy var controller = DropShelfPanelController(model: model)
     private var started = false
@@ -25,6 +25,7 @@ final class DropShelf {
     func start() {
         guard !started else { return }
         started = true
+        DropShelfStaging.purge()
         apply()
     }
 
@@ -80,6 +81,7 @@ final class DropShelf {
     private func modelChanged() {
         if !model.items.isEmpty { controller.openedByDrag = false }
         controller.resize()
+        DropShelfMenuBar.shared.refresh()
         if model.items.isEmpty, settings.autoCloseWhenEmpty, controller.isVisible, !model.internalDragActive {
             controller.hide()
         }

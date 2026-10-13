@@ -17,6 +17,7 @@ extension MenuBarManager {
             let ah = (includeAlwaysHidden && self.alwaysHiddenEnabled) ? self.items(in: .alwaysHidden) : []
             self.panel.model.notice = nil
             self.panel.model.onSelect = { [weak self] it in Task { await self?.activate(it) } }
+            self.panel.model.onShow = { [weak self] it in Task { await self?.move(it, to: .visible) } }
             self.panel.model.busyID = nil
             self.panel.ignoredWindow = win
             self.panel.show(hidden: hidden, alwaysHidden: ah, anchor: win.frame, on: screen)
@@ -227,6 +228,8 @@ extension MenuBarManager {
                                         object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.prefsChanged() }
         })
+        // Frontmost-app tracking only serves Classic's auto re-hide.
+        guard runningMode == .classic else { return }
         workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
@@ -237,6 +240,11 @@ extension MenuBarManager {
 
     private func screenParametersChanged() {
         panel.hide()
+        if runningMode == .dropdown {
+            dropdown.hide()
+            lastDropdownScan = nil // bar layout changed; rescan on next open
+            return
+        }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard let self, self.isRunning else { return }
@@ -249,7 +257,7 @@ extension MenuBarManager {
     }
 
     private func frontmostChanged(pid: pid_t?) {
-        guard isRunning, state != .collapsed, !interacting, !isMoving,
+        guard isRunning, runningMode == .classic, state != .collapsed, !interacting, !isMoving,
               MenuBarManagerPrefs.rehideOnAppChange,
               pid != ProcessInfo.processInfo.processIdentifier else { return }
         collapseWhenIdle()
@@ -266,6 +274,7 @@ extension MenuBarManager {
             if wantsRunning { start() }
             return
         }
+        if MenuBarManagerPrefs.mode != runningMode { switchMode(); return }
         applyPrefsIfChanged(force: false)
     }
 
@@ -273,16 +282,21 @@ extension MenuBarManager {
         let d = MenuBarManagerPrefs.self
         let hk = MenuBarManagerHotKey.stored
         let sig = [
-            "\(d.glyph.rawValue)", "\(d.showDivider)", "\(d.alwaysHiddenEnabled)", "\(d.showOnHover)",
+            runningMode.rawValue, "\(d.glyph.rawValue)", "\(d.showDivider)", "\(d.alwaysHiddenEnabled)", "\(d.showOnHover)",
             "\(d.showOnScroll)", "\(d.rehideOnClick)", "\(d.hotkeyEnabled)", "\(hk.keyCode)", "\(hk.modifiers)",
         ].joined(separator: "|")
         guard force || sig != lastPrefSignature else { return }
         lastPrefSignature = sig
 
-        syncAlwaysHiddenItem()
-        panel.ignoredWindow = toggleItem?.button?.window
-        reapply()
-        installMonitors()
+        if runningMode == .classic {
+            syncAlwaysHiddenItem()
+            panel.ignoredWindow = toggleItem?.button?.window
+            reapply()
+            installMonitors()
+        } else {
+            dropdown.ignoredWindow = toggleItem?.button?.window
+            updateToggleGlyph()
+        }
 
         let center = MenuBarManagerHotKeyCenter.shared
         center.onFire = { [weak self] in self?.toggleFromUser(optionDown: false) }

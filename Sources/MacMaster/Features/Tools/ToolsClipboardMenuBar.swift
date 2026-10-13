@@ -238,6 +238,8 @@ private struct ToolsClipboardPopoverRow: View {
                 HStack(spacing: 8) {
                     Button { bar.paste(item) } label: { Image(systemName: "arrow.down.doc") }
                         .help(AXIsProcessTrusted() ? "Paste into the frontmost app" : "Copy (grant Accessibility to paste)")
+                    Button { DropShelf.shared.add(clipboard: item.kind) } label: { Image(systemName: "tray.and.arrow.down") }
+                        .help("Add to Shelf")
                     Button { clip.remove(item) } label: { Image(systemName: "trash") }.help("Delete")
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)

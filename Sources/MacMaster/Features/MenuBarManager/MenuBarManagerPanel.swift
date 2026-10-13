@@ -12,6 +12,8 @@ final class MenuBarManagerPanelModel {
     var maxWidth: CGFloat = 900
     var busyID: Int?
     var onSelect: ((MenuBarManagerItem) -> Void)?
+    /// Right-click "Show in menu bar": the real ⌘-drag move back to the visible section.
+    var onShow: ((MenuBarManagerItem) -> Void)?
     /// When set, the panel shows this message and a button instead of icons.
     var notice: String?
     var onNoticeAction: (() -> Void)?
@@ -29,6 +31,7 @@ private struct MenuBarManagerSizeKey: PreferenceKey {
 struct MenuBarManagerIconCell: View {
     let item: MenuBarManagerItem
     var busy = false
+    var onShow: (() -> Void)?
     let action: () -> Void
     @State private var hover = false
     private let capture = MenuBarManagerCapture.shared
@@ -65,6 +68,13 @@ struct MenuBarManagerIconCell: View {
         .onHover { hover = $0 }
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: hover)
         .help(item.displayName)
+        .contextMenu {
+            Button("Open") { action() }
+            if let onShow {
+                Divider()
+                Button("Show in Menu Bar", action: onShow)
+            }
+        }
     }
 }
 
@@ -140,7 +150,8 @@ struct MenuBarManagerPanelView: View {
     }
 
     private func cell(_ it: MenuBarManagerItem) -> some View {
-        MenuBarManagerIconCell(item: it, busy: model.busyID == it.id) { model.onSelect?(it) }
+        MenuBarManagerIconCell(item: it, busy: model.busyID == it.id,
+                               onShow: model.onShow.map { f in { f(it) } }) { model.onSelect?(it) }
     }
 }
 

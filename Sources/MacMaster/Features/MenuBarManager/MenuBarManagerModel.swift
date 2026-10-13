@@ -53,6 +53,15 @@ enum MenuBarManagerPrefs {
     static var showDivider: Bool { bool(showDividerKey, default: true) }
     static var showSystemItems: Bool { bool(showSystemItemsKey, default: false) }
 
+    static var favorites: [String] {
+        get { defaults.stringArray(forKey: favoritesKey) ?? [] }
+        set { defaults.set(newValue, forKey: favoritesKey) }
+    }
+    static var dropdownHidden: [String] {
+        get { defaults.stringArray(forKey: dropdownHiddenKey) ?? [] }
+        set { defaults.set(newValue.sorted(), forKey: dropdownHiddenKey) }
+    }
+
     /// Dropdown is the default for everyone; Classic only when explicitly chosen.
     static var mode: MenuBarManagerMode {
         get { MenuBarManagerMode(rawValue: defaults.string(forKey: modeKey) ?? "") ?? .dropdown }

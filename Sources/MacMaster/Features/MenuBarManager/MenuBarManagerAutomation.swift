@@ -92,16 +92,6 @@ enum MenuBarManagerAutomation {
         return CGRect(origin: p, size: s)
     }
 
-    /// Synthetic left click at a global CG point (cursor is left where it ends up).
-    nonisolated static func click(at p: CGPoint) async {
-        let src = CGEventSource(stateID: .hidSystemState)
-        post(.mouseMoved, at: p, src: src)
-        try? await Task.sleep(nanoseconds: 40_000_000)
-        post(.leftMouseDown, at: p, src: src)
-        try? await Task.sleep(nanoseconds: 45_000_000)
-        post(.leftMouseUp, at: p, src: src)
-    }
-
     // MARK: ⌘-drag
 
     /// ⌘-drag from one point to another with eased intermediate steps. Restores the cursor afterwards.

@@ -63,6 +63,41 @@ struct MenuBarManagerBehaviourGroup: View {
     }
 }
 
+// MARK: - Dropdown mode settings
+
+struct MenuBarManagerDropdownBehaviourGroup: View {
+    private let manager = MenuBarManager.shared
+    @AppStorage(MenuBarManagerPrefs.showSystemItemsKey) private var showSystem = false
+    @AppStorage(MenuBarManagerPrefs.hotkeyEnabledKey) private var hotkeyEnabled = true
+    @State private var hotKey = MenuBarManagerHotKey.stored
+
+    var body: some View {
+        GroupedSection("Dropdown", symbol: "rectangle.topthird.inset.filled",
+                       footer: "Click the menu bar toggle or use the shortcut to open the list. Click an item to open its menu; right-click for its alternate menu or hold ⌥ to forward an option-click. Esc or a click elsewhere closes it.") {
+            SettingsRow(title: "Include macOS items", subtitle: "Wi-Fi, Clock, Control Center and other system items",
+                        symbol: "apple.logo", colors: Theme.Palette.gray) {
+                Toggle("", isOn: $showSystem).toggleStyle(.switch).labelsHidden()
+                    .onChange(of: showSystem) { _, _ in Task { await manager.refreshDropdownInventory(force: true) } }
+            }
+            SettingsRow(title: "Global shortcut", subtitle: hotkeySubtitle,
+                        symbol: "keyboard", colors: Theme.Palette.pink) {
+                HStack(spacing: 10) {
+                    MenuBarManagerHotKeyField(hotKey: $hotKey)
+                        .disabled(!hotkeyEnabled)
+                        .opacity(hotkeyEnabled ? 1 : 0.5)
+                    Toggle("", isOn: $hotkeyEnabled).toggleStyle(.switch).labelsHidden()
+                }
+            }
+        }
+        .onChange(of: hotKey) { _, new in new.save() }
+    }
+
+    private var hotkeySubtitle: String {
+        if let s = manager.hotKeyStatus, hotkeyEnabled { return s }
+        return "Open the dropdown from anywhere, including over full-screen apps"
+    }
+}
+
 // MARK: - Dropdown bar
 
 struct MenuBarManagerDropdownGroup: View {
@@ -164,6 +199,8 @@ struct MenuBarManagerSpacingGroup: View {
 // MARK: - Appearance
 
 struct MenuBarManagerAppearanceGroup: View {
+    /// Classic has a divider glyph; Dropdown mode has no divider at all.
+    var classic = true
     @AppStorage(MenuBarManagerPrefs.glyphKey) private var glyphRaw = MenuBarManagerGlyph.chevron.rawValue
     @AppStorage(MenuBarManagerPrefs.showDividerKey) private var showDivider = true
 
@@ -177,9 +214,11 @@ struct MenuBarManagerAppearanceGroup: View {
                     }
                 }
             }
-            SettingsRow(title: "Show divider glyph", subtitle: "The thin | between hidden and visible icons",
-                        symbol: "line.diagonal", colors: Theme.Palette.gray) {
-                Toggle("", isOn: $showDivider).toggleStyle(.switch).labelsHidden()
+            if classic {
+                SettingsRow(title: "Show divider glyph", subtitle: "The thin | between hidden and visible icons",
+                            symbol: "line.diagonal", colors: Theme.Palette.gray) {
+                    Toggle("", isOn: $showDivider).toggleStyle(.switch).labelsHidden()
+                }
             }
         }
     }
@@ -192,7 +231,8 @@ struct MenuBarManagerAppearanceGroup: View {
                     if g == .logo {
                         Image(nsImage: MenuBarIconRenderer.logoImage(size: 15)).renderingMode(.template)
                     } else {
-                        Image(systemName: g.symbol).font(.system(size: 13, weight: .semibold))
+                        Image(systemName: g == .chevron && !classic ? "chevron.down" : g.symbol)
+                            .font(.system(size: 13, weight: .semibold))
                     }
                 }
                 .frame(height: 18)
@@ -215,12 +255,16 @@ struct MenuBarManagerQuickToggle: View {
     @State private var hover = false
 
     var body: some View {
-        let on = manager.isRunning && manager.isCollapsed
+        let dropdownMode = MenuBarManagerPrefs.mode == .dropdown
+        let on = manager.isRunning && (dropdownMode ? manager.dropdown.isVisible : manager.isCollapsed)
         Button {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                 if !manager.isRunning {
                     MenuBarManagerPrefs.defaults.set(true, forKey: MenuBarManagerPrefs.enabledKey)
                     manager.start()
+                } else if dropdownMode {
+                    // Let the popover this tile lives in close first.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { manager.openDropdown() }
                 } else {
                     manager.toggle()
                 }
@@ -229,15 +273,15 @@ struct MenuBarManagerQuickToggle: View {
             HStack(spacing: 9) {
                 ZStack {
                     Circle().fill(on ? Theme.Palette.indigo[1] : Color.primary.opacity(0.13))
-                    Image(systemName: on ? "eye.slash.fill" : "eye.slash")
+                    Image(systemName: dropdownMode ? "rectangle.topthird.inset.filled" : (on ? "eye.slash.fill" : "eye.slash"))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(on ? Color.white : Color.primary.opacity(0.75))
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 34, height: 34)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Hide Icons").font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    Text(subtitle(on: on)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(dropdownMode ? "Menu Bar Items" : "Hide Icons").font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                    Text(dropdownMode ? dropdownSubtitle : subtitle(on: on)).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 0)
             }
@@ -249,7 +293,13 @@ struct MenuBarManagerQuickToggle: View {
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(.smooth(duration: 0.15)) { hover = h } }
-        .help("Collapse or expand hidden menu bar icons")
+        .help(dropdownMode ? "List every menu bar item" : "Collapse or expand hidden menu bar icons")
+    }
+
+    private var dropdownSubtitle: String {
+        guard manager.isRunning else { return "Off" }
+        let n = manager.dropdownEntries.count
+        return n > 0 ? "\(n) items" : "Open list"
     }
 
     private func subtitle(on: Bool) -> String {

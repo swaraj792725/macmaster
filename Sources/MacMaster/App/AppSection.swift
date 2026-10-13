@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, optimizer, uninstaller, cleaner, battery, power, stats, health, mouse, keyboard, windows, tiling, menubar, tools, shelf, permissions
+    case dashboard, optimizer, uninstaller, cleaner, battery, power, stats, health, mouse, keyboard, windows, tiling, tools, shelf, menubar, wifi, controlcenter, clock, permissions
 
     var id: String { rawValue }
 
@@ -22,6 +22,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .menubar: "Menu Bar Icons"
         case .tools: "Toolbox"
         case .shelf: "Drop Shelf"
+        case .wifi: "Wi-Fi"
+        case .controlcenter: "Control Center"
+        case .clock: "Clock"
         case .permissions: "Permissions"
         }
     }
@@ -43,6 +46,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .menubar: "menubar.rectangle"
         case .tools: "wrench.and.screwdriver.fill"
         case .shelf: "tray.and.arrow.down.fill"
+        case .wifi: "wifi"
+        case .controlcenter: "switch.2"
+        case .clock: "clock.fill"
         case .permissions: "lock.shield.fill"
         }
     }
@@ -65,6 +71,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .menubar: "Hide, collapse and arrange menu bar icons"
         case .tools: "Large files, duplicates, startup items"
         case .shelf: "Park files while you drag, then drop them anywhere"
+        case .wifi: "Signal, speed, addresses and nearby networks"
+        case .controlcenter: "Tiles, brightness and sound in your menu bar"
+        case .clock: "Menu bar clock, calendar, world time and time zone"
         case .permissions: "What MacMaster can access, and why"
         }
     }
@@ -100,6 +109,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .menubar: Theme.Palette.indigo
         case .tools: Theme.Palette.tools
         case .shelf: Theme.Palette.mint
+        case .wifi: Theme.Palette.blue
+        case .controlcenter: Theme.Palette.indigo
+        case .clock: Theme.Palette.orange
         case .permissions: Theme.Palette.blue
         }
     }
@@ -109,7 +121,8 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: ""
         case .optimizer, .uninstaller, .cleaner: "Clean"
         case .battery, .power, .stats, .health: "Monitor"
-        case .mouse, .keyboard, .windows, .tiling, .menubar, .tools, .shelf: "Enhance"
+        case .mouse, .keyboard, .windows, .tiling, .tools, .shelf: "Enhance"
+        case .menubar, .wifi, .controlcenter, .clock: "Menu Bar"
         case .permissions: "Setup"
         }
     }
@@ -132,6 +145,9 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .menubar: MenuBarManagerView()
         case .tools: ToolsView()
         case .shelf: DropShelfView()
+        case .wifi: WiFiView()
+        case .controlcenter: ControlCenterView()
+        case .clock: ClockView()
         case .permissions: PermissionsView()
         }
     }

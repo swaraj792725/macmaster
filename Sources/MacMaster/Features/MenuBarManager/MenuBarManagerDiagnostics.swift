@@ -11,25 +11,35 @@ enum MenuBarManagerDiagnostics {
             let dir = (path as NSString).deletingLastPathComponent
             let m = MenuBarManager.shared
             try? await Task.sleep(for: .seconds(4))
-            m.clearHidingUnsupported()
-            log += dump("initial", m); shot(dir, "initial")
-            m.collapse()
-            try? await Task.sleep(for: .seconds(1.5))
-            log += dump("after collapse", m); shot(dir, "collapsed")
-            m.expand()
-            try? await Task.sleep(for: .seconds(1.5))
-            log += dump("after expand", m); shot(dir, "expanded")
-            for len in [600.0, 1500.0] {
-                m.dividerItem?.length = len
+            if m.runningMode == .dropdown {
+                // Dropdown mode moves nothing: dump the inventory with inferred visibility, then open the list.
+                await m.refreshDropdownInventory(force: true)
+                log += dump("initial", m); shot(dir, "initial")
+                m.openDropdown()
+                try? await Task.sleep(for: .seconds(2))
+                log += "dropdown visible=\(m.dropdown.isVisible) frame=\(m.dropdown.frame.map { "\($0)" } ?? "nil")\n"
+                m.dropdown.hide()
+            } else {
+                m.clearHidingUnsupported()
+                log += dump("initial", m); shot(dir, "initial")
+                m.collapse()
                 try? await Task.sleep(for: .seconds(1.5))
-                log += dump("divider len \(len)", m); shot(dir, "len\(Int(len))")
+                log += dump("after collapse", m); shot(dir, "collapsed")
+                m.expand()
+                try? await Task.sleep(for: .seconds(1.5))
+                log += dump("after expand", m); shot(dir, "expanded")
+                for len in [600.0, 1500.0] {
+                    m.dividerItem?.length = len
+                    try? await Task.sleep(for: .seconds(1.5))
+                    log += dump("divider len \(len)", m); shot(dir, "len\(Int(len))")
+                }
+                m.dividerItem?.length = MenuBarManager.dividerLength
+                log += "unsupported=\(m.hidingUnsupported)\n"
+                m.toggleFromUser(optionDown: false)
+                try? await Task.sleep(for: .seconds(1.5))
+                log += "panel visible=\(m.panel.isVisible) frame=\(m.panel.frame.map { "\($0)" } ?? "nil")\n"
+                m.panel.hide()
             }
-            m.dividerItem?.length = MenuBarManager.dividerLength
-            log += "unsupported=\(m.hidingUnsupported)\n"
-            m.toggleFromUser(optionDown: false)
-            try? await Task.sleep(for: .seconds(1.5))
-            log += "panel visible=\(m.panel.isVisible) frame=\(m.panel.frame.map { "\($0)" } ?? "nil")\n"
-            m.panel.hide()
             try? log.write(toFile: path, atomically: true, encoding: .utf8)
             if ProcessInfo.processInfo.environment["MM_SNAPSHOT_QUIT"] != nil { NSApp.terminate(nil) }
         }
@@ -55,6 +65,11 @@ enum MenuBarManagerDiagnostics {
         s += "  AX items: \(raw.count)\n"
         for r in raw.sorted(by: { $0.frame.minX < $1.frame.minX }) {
             s += "    \(r.ownerName) [\(r.identifier)] '\(r.title)' \(r.frame)\n"
+        }
+        if m.runningMode == .dropdown {
+            s += "  dropdown inventory: \(m.dropdownEntries.count) notShowing=\(m.dropdownNotShowingCount)\n"
+            for e in m.dropdownEntries { s += "    \(e.displayName) \(e.visibility.rawValue) id=\(e.id) \(e.frame)\n" }
+            return s
         }
         s += "  inventory: \(m.items.count) hidden=\(m.hiddenCount)\n"
         for it in m.items { s += "    \(it.displayName) \(it.section) \(it.frame)\n" }

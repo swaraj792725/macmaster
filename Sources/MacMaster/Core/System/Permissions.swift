@@ -3,9 +3,11 @@ import SwiftUI
 import ApplicationServices
 import CoreGraphics
 import UserNotifications
+import CoreLocation
+import EventKit
 
 enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case accessibility, screenRecording, fullDiskAccess, notifications
+    case accessibility, screenRecording, fullDiskAccess, notifications, location, calendars
     var id: String { rawValue }
 
     var title: String {
@@ -14,6 +16,8 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .screenRecording: "Screen Recording"
         case .fullDiskAccess: "Full Disk Access"
         case .notifications: "Notifications"
+        case .location: "Location"
+        case .calendars: "Calendars"
         }
     }
 
@@ -28,6 +32,10 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
             "Lets the Cleaner and Uninstaller look inside protected folders such as app containers and system caches, so deep scans find everything."
         case .notifications:
             "Lets MacMaster tell you when a scheduled clean finishes, the battery needs attention, or the Health Monitor spots a problem."
+        case .location:
+            "macOS hides your Wi-Fi network name from apps unless Location is allowed. MacMaster only uses it to show the network name; your location is never read or stored."
+        case .calendars:
+            "Lets the Clock popover show your upcoming events, join links and a \"next event\" line. Events are read on demand from the calendars you already have in Calendar; nothing is changed, stored or sent anywhere."
         }
     }
 
@@ -42,6 +50,10 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
             ["Cleaner deep scans", "Uninstaller deep scans", "Leftover Hunter"]
         case .notifications:
             ["Scheduled clean alerts", "Battery alerts", "Health Monitor alerts"]
+        case .location:
+            ["Wi-Fi network name", "Nearby networks list"]
+        case .calendars:
+            ["Clock popover events", "Next event in the menu bar"]
         }
     }
 
@@ -52,6 +64,8 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .screenRecording: SymbolKit.firstAvailable(["rectangle.inset.filled.and.person.filled", "record.circle", "rectangle.dashed"])
         case .fullDiskAccess: SymbolKit.firstAvailable(["internaldrive.fill", "externaldrive.fill"])
         case .notifications: SymbolKit.firstAvailable(["bell.badge.fill", "bell.fill"])
+        case .location: SymbolKit.firstAvailable(["location.fill", "location"])
+        case .calendars: SymbolKit.firstAvailable(["calendar", "calendar.badge.clock"])
         }
     }
 
@@ -62,6 +76,8 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .screenRecording: Theme.Palette.purple
         case .fullDiskAccess: Theme.Palette.orange
         case .notifications: Theme.Palette.red
+        case .location: Theme.Palette.teal
+        case .calendars: Theme.Palette.pink
         }
     }
 
@@ -74,6 +90,8 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .accessibility, .screenRecording: "Grant"
         case .fullDiskAccess: "Open Settings"
         case .notifications: Permissions.notificationsCanPrompt ? "Grant" : "Open Settings"
+        case .location: Permissions.locationCanPrompt ? "Grant" : "Open Settings"
+        case .calendars: Permissions.calendarsCanPrompt ? "Grant" : "Open Settings"
         }
     }
 
@@ -84,6 +102,8 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .screenRecording: return URL(string: base + "Privacy_ScreenCapture")!
         case .fullDiskAccess: return URL(string: base + "Privacy_AllFiles")!
         case .notifications: return URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
+        case .location: return URL(string: base + "Privacy_LocationServices")!
+        case .calendars: return URL(string: base + "Privacy_Calendars")!
         }
     }
 }
@@ -95,6 +115,8 @@ enum Permissions {
         case .screenRecording: return CGPreflightScreenCaptureAccess()
         case .fullDiskAccess: return hasFullDiskAccess
         case .notifications: return notificationState.granted
+        case .location: return locationGranted
+        case .calendars: return calendarsGranted
         }
     }
 
@@ -103,6 +125,8 @@ enum Permissions {
 
     static func request(_ p: Permission) {
         if p == .notifications { requestNotifications(); return }
+        if p == .location { requestLocation(); return }
+        if p == .calendars { requestCalendars(); return }
         if !isGranted(p) { resetStaleEntry(p) }
         switch p {
         case .accessibility:
@@ -112,7 +136,7 @@ enum Permissions {
             if !CGRequestScreenCaptureAccess() { NSWorkspace.shared.open(p.settingsURL) }
         case .fullDiskAccess:
             NSWorkspace.shared.open(p.settingsURL)
-        case .notifications:
+        case .notifications, .location, .calendars:
             break
         }
     }
@@ -124,7 +148,7 @@ enum Permissions {
         switch p {
         case .accessibility: service = "Accessibility"
         case .screenRecording: service = "ScreenCapture"
-        case .fullDiskAccess, .notifications: return   // can't be reset without admin rights / not TCC
+        case .fullDiskAccess, .notifications, .location, .calendars: return   // can't be reset without admin rights / not TCC
         }
         guard let id = Bundle.main.bundleIdentifier else { return }
         let task = Process()
@@ -201,6 +225,71 @@ enum Permissions {
         }
     }
 
+    // MARK: Location
+
+    /// Raw CoreLocation status (cheap, class-level; safe from any thread).
+    private static var locationStatus: CLAuthorizationStatus { CLLocationManager.authorizationStatus() }
+
+    static var locationGranted: Bool {
+        let s = locationStatus
+        return s == .authorizedAlways   // macOS reports "when in use" grants as authorizedAlways
+    }
+
+    /// True while macOS has not yet asked the user (so a request shows the system prompt).
+    static var locationCanPrompt: Bool { locationStatus == .notDetermined }
+
+    private static func requestLocation() {
+        if locationCanPrompt {
+            Task { @MainActor in LocationAuthorizer.shared.requestWhenInUse() }
+        } else {
+            NSWorkspace.shared.open(Permission.location.settingsURL)
+        }
+    }
+
+    // MARK: Calendars
+
+    /// Full access to events is needed to read them (write-only does not allow reads).
+    static var calendarsGranted: Bool {
+        EKEventStore.authorizationStatus(for: .event) == .fullAccess
+    }
+
+    /// True while macOS has not yet asked the user (so a request shows the system prompt).
+    static var calendarsCanPrompt: Bool { EKEventStore.authorizationStatus(for: .event) == .notDetermined }
+
+    private static func requestCalendars() {
+        guard calendarsCanPrompt else { NSWorkspace.shared.open(Permission.calendars.settingsURL); return }
+        Task { @MainActor in
+            _ = await CalendarEvents.shared.requestAccess()
+            NotificationCenter.default.post(name: .calendarAuthorizationChanged, object: nil)
+        }
+    }
+
     /// Re-reads every permission that needs an async check. Cheap AX/ScreenCapture/FDA checks are read live.
     static func refresh() async { await refreshNotificationStatus() }
+}
+
+extension Notification.Name {
+    /// Posted on the main queue when the Location authorization status changes.
+    static let locationAuthorizationChanged = Notification.Name("MacMaster.locationAuthorizationChanged")
+    /// Posted on the main queue after the Calendars permission prompt is answered.
+    static let calendarAuthorizationChanged = Notification.Name("MacMaster.calendarAuthorizationChanged")
+}
+
+/// Keeps a CLLocationManager alive so the system prompt can complete, and announces status changes.
+/// Only authorization is used (so CoreWLAN may reveal SSIDs); no location updates are ever started.
+@MainActor
+final class LocationAuthorizer: NSObject, CLLocationManagerDelegate {
+    static let shared = LocationAuthorizer()
+    private var manager: CLLocationManager?
+
+    func requestWhenInUse() {
+        let m = manager ?? CLLocationManager()
+        m.delegate = self
+        manager = m
+        m.requestWhenInUseAuthorization()
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        DispatchQueue.main.async { NotificationCenter.default.post(name: .locationAuthorizationChanged, object: nil) }
+    }
 }

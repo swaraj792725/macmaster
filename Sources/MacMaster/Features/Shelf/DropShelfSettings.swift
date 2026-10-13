@@ -24,6 +24,8 @@ final class DropShelfSettings {
     var shakeToOpen: Bool { didSet { save(shakeToOpen, Keys.shake) } }
     var edge: DropShelfEdge { didSet { save(edge.rawValue, Keys.edge) } }
     var autoCloseWhenEmpty: Bool { didSet { save(autoCloseWhenEmpty, Keys.autoClose) } }
+    /// Menu bar icon with an item-count badge, a popover, and a drop target.
+    var showInMenuBar: Bool { didSet { save(showInMenuBar, Keys.menuBar); DropShelfMenuBar.shared.update() } }
 
     /// Called after any change; `DropShelf` uses it to (un)install the drag monitor.
     @ObservationIgnored var onChange: (() -> Void)?
@@ -33,6 +35,7 @@ final class DropShelfSettings {
         static let shake = "mm.shelf.shake"
         static let edge = "mm.shelf.edge"
         static let autoClose = "mm.shelf.autoclose"
+        static let menuBar = "mm.shelf.menuBar"
     }
 
     private init() {
@@ -41,6 +44,7 @@ final class DropShelfSettings {
         shakeToOpen = d.object(forKey: Keys.shake) as? Bool ?? true
         edge = DropShelfEdge(rawValue: d.string(forKey: Keys.edge) ?? "") ?? .off
         autoCloseWhenEmpty = d.object(forKey: Keys.autoClose) as? Bool ?? true
+        showInMenuBar = d.object(forKey: Keys.menuBar) as? Bool ?? true
     }
 
     private func save(_ value: Any, _ key: String) {

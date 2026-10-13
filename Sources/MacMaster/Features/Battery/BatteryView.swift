@@ -33,7 +33,7 @@ struct BatteryView: View {
                 }
 
                 BatteryChartsSection()
-                BatteryChargeLimitCard()
+                BatteryChargeLimitCard(reading: r)
             }
         }
         .onAppear { monitor.start(); monitor.refresh() }
@@ -366,28 +366,5 @@ private struct BatteryAlertsCard: View {
         .card()
         .onChange(of: lowOn) { _, on in if on { Notifier.requestAuthorization() } }
         .onChange(of: highOn) { _, on in if on { Notifier.requestAuthorization() } }
-    }
-}
-
-// MARK: - Charge limit info
-
-private struct BatteryChargeLimitCard: View {
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            IconTile(symbol: "leaf.fill", colors: Theme.Palette.cleaner, size: 36)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("About charge limits").font(.headline)
-                Text("Capping charging at 80% requires writing to the SMC as root, which MacMaster doesn't do. macOS has a built-in alternative: Optimized Battery Charging learns your routine and holds the battery at 80% until you need it. Turn it on in System Settings → Battery → Battery Health.")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("Open Battery Settings") {
-                    if let url = URL(string: "x-apple.systempreferences:com.apple.Battery-Settings.extension") {
-                        NSWorkspace.shared.open(url)
-                    }
-                }
-                .padding(.top, 4)
-            }
-        }
-        .card()
     }
 }

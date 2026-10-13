@@ -264,6 +264,8 @@ private struct ToolsClipboardRow: View {
             } else {
                 Text(ToolsFormat.relative(item.date)).font(.caption).foregroundStyle(.tertiary)
             }
+            Button { DropShelf.shared.add(clipboard: item.kind) } label: { Image(systemName: "tray.and.arrow.down").foregroundStyle(.secondary) }
+                .buttonStyle(.plain).help("Add to Shelf")
             Button { clip.togglePin(item) } label: {
                 Image(systemName: item.pinned ? "pin.fill" : "pin")
                     .foregroundStyle(item.pinned ? Color.orange : Color.secondary)
