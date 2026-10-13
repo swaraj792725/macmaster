@@ -4,6 +4,11 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.1] - 2026-10-13
+
+### Fixed
+- MacMaster could still freeze, soon after launch or while the menu bar tray was in use. It read its own menu bar icons through Accessibility, which ran interface code off the main thread. It now reads and clicks its own icons directly. Window tiling, the window switcher and Dock previews also stopped querying MacMaster's own windows through Accessibility.
+
 ## [0.4.0] - 2026-10-13
 
 ### Added
