@@ -236,7 +236,7 @@ extension AppSection {
         case .shelf: "dropover drag drop files temporary"
         case .menubar: "hide icons bartender collapse arrange notch dropdown spacing"
         case .wifi: "signal speed ip address ssid network"
-        case .controlcenter: "tiles brightness volume sound focus"
+        case .controlcenter: "apple control center clock redirect menu bar icons"
         case .clock: "time date calendar world clock time zone format"
         case .permissions: "accessibility screen recording privacy access"
         }

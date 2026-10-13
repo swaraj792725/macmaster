@@ -182,15 +182,9 @@ enum AppSearchIndex {
         SearchEntry(.menubar, "Hide menu bar icons", "collapse bartender declutter notch"),
         SearchEntry(.menubar, "Rearrange menu bar icons", "drag order zones visible hidden always hidden"),
 
-        SearchEntry(.controlcenter, crumb: "Menu bar icon", "Control Center menu bar icon", "show hide icon"),
-        SearchEntry(.controlcenter, crumb: "Layout", "Layout preset", "tiles arrangement"),
-        SearchEntry(.controlcenter, crumb: "Layout", "Reset layout", "default tiles"),
-        SearchEntry(.controlcenter, crumb: "Tiles", "Control Center tiles", "brightness volume wi-fi bluetooth focus dark mode night shift"),
-        SearchEntry(.controlcenter, crumb: "Focus shortcut", "Focus shortcut name", "do not disturb shortcuts app"),
-        SearchEntry(.controlcenter, crumb: "Replace Apple's Control Center", "Open MacMaster's Control Center", "redirect clicks apple icon"),
-        SearchEntry(.controlcenter, crumb: "Replace Apple's Control Center", "Open MacMaster's Clock", "redirect clicks apple clock"),
-        SearchEntry(.controlcenter, crumb: "Replace Apple's Control Center", "Hide Apple's Control Center icon", "experimental hide"),
-        SearchEntry(.controlcenter, crumb: "Other Apple menu bar items", "Hide other Apple menu bar items", "restore all wifi battery sound"),
+        SearchEntry(.controlcenter, crumb: "Apple's icons", "Apple's Control Center opens MacMaster", "redirect clicks apple icon dropdown"),
+        SearchEntry(.controlcenter, crumb: "Apple's icons", "Apple's clock opens MacMaster's Clock", "redirect clicks apple clock"),
+        SearchEntry(.controlcenter, crumb: "Hide Apple's icons", "Open Menu Bar settings", "hide apple menu bar items system settings"),
 
         SearchEntry(.clock, crumb: "Format", "Show in menu bar", "clock enable menu bar"),
         SearchEntry(.clock, crumb: "Presets", "Clock presets", "format preset"),

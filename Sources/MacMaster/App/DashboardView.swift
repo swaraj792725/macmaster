@@ -275,7 +275,7 @@ private struct LauncherStatus {
         case .menubar:
             return onOff("mm.menubarmgr.enabled") ?? fallback
         case .controlcenter:
-            return onOff("mm.controlcenter.show", on: "Icon shown", off: "Icon hidden") ?? fallback
+            return onOff("mm.controlcenter.redirectAppleControlCenter", on: "Redirect on", off: "Apple's own") ?? fallback
         case .clock:
             return onOff("mm.clock.show", on: "Icon shown", off: "Icon hidden") ?? fallback
         case .cleaner:

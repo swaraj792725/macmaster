@@ -98,7 +98,7 @@ enum Services {
         UninstallerDeletionWatcher.shared.start()
         DropShelf.shared.start()
         WiFiMenuBar.shared.update()
-        ControlCenterMenuBar.shared.update()
+        AppleItemRedirect.shared.update()
         ClockMenuBar.shared.update()
         DropShelfMenuBar.shared.update()
         ToolsKeepAwake.shared.start()

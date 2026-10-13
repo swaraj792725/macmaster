@@ -30,7 +30,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .tools: "Toolbox"
         case .shelf: "Drop Shelf"
         case .wifi: "Wi-Fi"
-        case .controlcenter: "Control Center"
+        case .controlcenter: "Control Center & Clock"
         case .clock: "Clock"
         case .permissions: "Permissions"
         }
@@ -79,7 +79,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .tools: "Large files, duplicates, startup items"
         case .shelf: "Park files while you drag, then drop them anywhere"
         case .wifi: "Signal, speed, addresses and nearby networks"
-        case .controlcenter: "Tiles, brightness and sound in your menu bar"
+        case .controlcenter: "Apple's Control Center and clock icons"
         case .clock: "Menu bar clock, calendar, world time and time zone"
         case .permissions: "What MacMaster can access, and why"
         }

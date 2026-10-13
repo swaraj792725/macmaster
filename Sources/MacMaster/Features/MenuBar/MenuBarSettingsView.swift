@@ -21,6 +21,7 @@ private struct MenuBarPrefToggle: View {
 struct MenuBarSettingsView: View {
     @AppStorage(MenuBarPrefs.iconStyleKey) private var styleRaw = MenuBarIconStyle.logo.rawValue
     @AppStorage(MenuBarPrefs.textMetricKey) private var metricRaw = MenuBarTextMetric.cpu.rawValue
+    @AppStorage(MenuBarPrefs.columnsKey) private var columns = 2
     @State private var preview = NSImage()
 
     private var style: MenuBarIconStyle { MenuBarIconStyle(rawValue: styleRaw) ?? .logo }
@@ -55,8 +56,16 @@ struct MenuBarSettingsView: View {
                 }
             }
 
-            Section("Control Center tiles") {
-                Text("The tiles (Wi-Fi, Bluetooth, Focus, brightness, sound and the rest) are the Control Center grid at the top of this dropdown. Press the edit button there to drag, resize or hide them, or use the Control Center page.")
+            Section("Toggle tiles") {
+                Picker("Layout", selection: $columns) {
+                    Text("2 columns").tag(2)
+                    Text("3 columns").tag(3)
+                }
+                .pickerStyle(.segmented)
+                ForEach(MenuBarTile.allCases) { t in
+                    MenuBarPrefToggle(title: t.title, symbol: t.symbol, key: t.key)
+                }
+                Text("Wi-Fi, Bluetooth and Mute tiles hide automatically when your Mac has no such control.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

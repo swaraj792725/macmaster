@@ -58,7 +58,6 @@ final class MainStatusItem: NSObject, NSPopoverDelegate {
 
     func popoverDidClose(_ notification: Notification) {
         popover.contentViewController = nil
-        ControlCenterModel.shared.closed()
         AppleItemRedirect.shared.anchorDone()
     }
 }

@@ -436,6 +436,13 @@ struct MenuBarManagerDropdownView: View {
                        height: contentSize.height > 0 ? min(contentSize.height, model.maxListHeight) : nil)
                 .onPreferenceChange(MenuBarManagerFlyoutFramesKey.self) { frames = $0 }
             }
+            if manager.hidingUnsupported && !(overflow.isEmpty && always.isEmpty) {
+                // macOS 27: apps can't move other apps' icons, so a dropped icon stays in the bar too.
+                note("macOS keeps these in the menu bar too. Hide them in System Settings › Menu Bar.", button: "Open") {
+                    manager.dropdown.hide()
+                    manager.openSystemMenuBarSettings()
+                }
+            }
             if !Permissions.isGranted(.screenRecording) && !(overflow.isEmpty && always.isEmpty) {
                 Text("Grant Screen Recording to show the real icons.")
                     .font(.system(size: 10)).foregroundStyle(.tertiary).padding(.horizontal, 6).padding(.bottom, 2)
