@@ -226,7 +226,7 @@ enum WindowPreviewStageManager {
     }
 
     static func realSize(pid: pid_t, id: UInt32) -> CGSize? {
-        guard Permissions.isGranted(.accessibility) else { return nil }
+        guard pid != SelfAX.pid, Permissions.isGranted(.accessibility) else { return nil }
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.25)
         guard let win = WindowPreviewAX.elements(app, kAXWindowsAttribute).first(where: { WindowPreviewAX.windowID($0) == id }),

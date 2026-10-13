@@ -6,6 +6,7 @@ import ApplicationServices
 enum WindowPreviewActions {
     /// Find a live AX element for a window (the stored one may be stale).
     private static func resolve(_ w: WindowPreviewWindow) -> AXUIElement? {
+        guard w.pid != SelfAX.pid else { return nil }
         if let ax = w.ax, WindowPreviewAX.string(ax, kAXRoleAttribute) != nil { return ax }
         let app = AXUIElementCreateApplication(w.pid)
         AXUIElementSetMessagingTimeout(app, 0.5)
@@ -16,6 +17,14 @@ enum WindowPreviewActions {
     }
 
     static func focus(_ w: WindowPreviewWindow) {
+        if w.pid == SelfAX.pid {
+            if let win = NSApp.window(withWindowNumber: Int(w.id)) {
+                if win.isMiniaturized { win.deminiaturize(nil) }
+                win.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate()
+            return
+        }
         let axApp = AXUIElementCreateApplication(w.pid)
         AXUIElementSetMessagingTimeout(axApp, 0.5)
         let running = NSRunningApplication(processIdentifier: w.pid)
@@ -36,6 +45,7 @@ enum WindowPreviewActions {
     }
 
     static func close(_ w: WindowPreviewWindow) {
+        if w.pid == SelfAX.pid { NSApp.window(withWindowNumber: Int(w.id))?.performClose(nil); return }
         guard let ax = resolve(w),
               let btn = WindowPreviewAX.attr(ax, kAXCloseButtonAttribute) else { return }
         AXUIElementPerformAction(btn as! AXUIElement, kAXPressAction as CFString)
@@ -44,6 +54,10 @@ enum WindowPreviewActions {
     /// Returns the new minimized state.
     @discardableResult
     static func toggleMinimize(_ w: WindowPreviewWindow) -> Bool {
+        if w.pid == SelfAX.pid, let win = NSApp.window(withWindowNumber: Int(w.id)) {
+            if win.isMiniaturized { win.deminiaturize(nil) } else { win.miniaturize(nil) }
+            return win.isMiniaturized
+        }
         guard let ax = resolve(w) else { return w.isMinimized }
         let now = WindowPreviewAX.bool(ax, kAXMinimizedAttribute) ?? w.isMinimized
         AXUIElementSetAttributeValue(ax, kAXMinimizedAttribute as CFString, (!now) as CFBoolean)
@@ -61,6 +75,10 @@ enum WindowPreviewActions {
     /// Toggles native full screen for the window (AXFullScreen). Returns false when unsupported.
     @discardableResult
     static func toggleFullscreen(_ w: WindowPreviewWindow) -> Bool {
+        if w.pid == SelfAX.pid, let win = NSApp.window(withWindowNumber: Int(w.id)) {
+            win.toggleFullScreen(nil)
+            return true
+        }
         guard let ax = resolve(w) else { return false }
         let now = WindowPreviewAX.bool(ax, "AXFullScreen") ?? false
         return AXUIElementSetAttributeValue(ax, "AXFullScreen" as CFString, (!now) as CFBoolean) == .success

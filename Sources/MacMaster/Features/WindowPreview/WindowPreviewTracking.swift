@@ -104,6 +104,13 @@ final class WindowPreviewRecency {
         if observers[pid] == nil { attach(pid) }
         previousPID = (prev != pid) ? prev : previousPID
         onActivation?(pid, prev != pid ? prev : nil)
+        if pid == SelfAX.pid {
+            if let id = NSApp.keyWindow.map({ UInt32($0.windowNumber) }) {
+                noteWindow(id, pid: pid)
+                onFocusedWindow?(id, pid)
+            }
+            return
+        }
         // Which window of the app is focused? Read off-main (AX can be slow for busy apps).
         Task { [weak self] in
             let id = await Task.detached(priority: .utility) { () -> UInt32? in
@@ -162,7 +169,7 @@ final class WindowPreviewRecency {
     }
 
     private func attach(_ pid: pid_t) {
-        guard observers[pid] == nil, AXIsProcessTrusted() else { return }
+        guard observers[pid] == nil, pid != SelfAX.pid, AXIsProcessTrusted() else { return }
         var obs: AXObserver?
         guard AXObserverCreate(pid, recencyAXCallback, &obs) == .success, let obs else { return }
         let app = AXUIElementCreateApplication(pid)

@@ -112,6 +112,7 @@ enum HealthAXProbe {
     enum Result { case responsive, hung, unknown }
 
     static func probe(pid: pid_t) -> Result {
+        guard pid != SelfAX.pid else { return .responsive }
         let el = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(el, 0.5)
         var value: CFTypeRef?

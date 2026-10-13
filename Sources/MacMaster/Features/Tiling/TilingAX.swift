@@ -83,6 +83,7 @@ enum TilingAX {
     /// Size → position → size, so cross-display moves and clamped sizes still land correctly.
     @discardableResult
     static func setFrame(_ w: TilingWindow, _ r: CGRect) -> Bool {
+        guard w.pid != ownPID else { return false }
         let app = AXUIElementCreateApplication(w.pid)
         AXUIElementSetMessagingTimeout(app, 0.4)
         // Enhanced UI makes some apps animate/lag on AX moves.
@@ -120,7 +121,9 @@ enum TilingAX {
         return nil
     }
 
+    /// Nil over MacMaster's own windows: hit-testing ourselves runs SwiftUI accessibility (see `SelfAX`).
     static func elementAt(_ p: CGPoint) -> AXUIElement? {
+        guard !SelfAX.ownsWindow(at: p) else { return nil }
         var el: AXUIElement?
         let r = AXUIElementCopyElementAtPosition(systemWide, Float(p.x), Float(p.y), &el)
         return r == .success ? el : nil
@@ -167,6 +170,7 @@ enum TilingAX {
     }
 
     static func raise(_ w: TilingWindow) {
+        guard w.pid != ownPID else { return }
         // AXFrontmost works for other apps without the macOS 14 cooperative-activation limits.
         let app = AXUIElementCreateApplication(w.pid)
         AXUIElementSetAttributeValue(app, "AXFrontmost" as CFString, kCFBooleanTrue)

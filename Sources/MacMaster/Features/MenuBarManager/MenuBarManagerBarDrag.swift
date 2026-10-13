@@ -60,6 +60,9 @@ final class MenuBarManagerBarDragWatcher {
             $0.visibility.isShowing && !MenuBarManager.isLocked(name: $0.displayName, identifier: $0.identifier)
         }
         if let e = movable.first(where: { $0.frame.insetBy(dx: -1, dy: -1).contains(cg) }) { return e }
+        if SelfAX.ownsWindow(at: cg) {
+            return movable.filter { $0.pid == SelfAX.pid }.min { abs($0.frame.midX - cg.x) < abs($1.frame.midX - cg.x) }
+        }
         guard Permissions.isGranted(.accessibility) else { return nil }
         var el: AXUIElement?
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.1)

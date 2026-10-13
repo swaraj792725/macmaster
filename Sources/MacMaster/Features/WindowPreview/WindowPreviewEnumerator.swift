@@ -134,7 +134,8 @@ enum WindowPreviewEnumerator {
         let axApp = AXUIElementCreateApplication(app.pid)
         AXUIElementSetMessagingTimeout(axApp, 0.4)
         let cgByID = Dictionary(cg.filter { $0.pid == app.pid }.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let axWindows = WindowPreviewAX.elements(axApp, kAXWindowsAttribute)
+        // Never ask ourselves through AX (see `SelfAX`); our windows come from the CG list below.
+        let axWindows = app.pid == SelfAX.pid ? [] : WindowPreviewAX.elements(axApp, kAXWindowsAttribute)
 
         var result: [WindowPreviewWindow] = []
         var seen = Set<UInt32>()
