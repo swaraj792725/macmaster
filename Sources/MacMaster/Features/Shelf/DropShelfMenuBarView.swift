@@ -187,6 +187,7 @@ final class DropShelfQuickLook: NSObject, QLPreviewPanelDataSource {
         panel.dataSource = self
         panel.reloadData()
         panel.currentPreviewItemIndex = urls.firstIndex(of: url) ?? 0
+        FrontAppTracker.markDeliberate()
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
     }

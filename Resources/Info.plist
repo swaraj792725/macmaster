@@ -2,26 +2,47 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key><string>en</string>
-    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-    <key>CFBundleExecutable</key><string>MacMaster</string>
-    <key>CFBundleIdentifier</key><string>com.macmaster.app</string>
-    <key>CFBundleName</key><string>MacMaster</string>
-    <key>CFBundleDisplayName</key><string>MacMaster</string>
-    <key>CFBundleIconFile</key><string>AppIcon</string>
-    <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
-    <key>LSMinimumSystemVersion</key><string>14.0</string>
-    <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-    <key>NSHighResolutionCapable</key><true/>
-    <key>NSPrincipalClass</key><string>NSApplication</string>
-    <key>NSBluetoothAlwaysUsageDescription</key><string>MacMaster reads and toggles Bluetooth power from the menu bar Control Center.</string>
-    <key>NSAppleEventsUsageDescription</key><string>MacMaster uses System Events to read login items and to run maintenance actions you choose.</string>
-    <key>NSLocationUsageDescription</key><string>Location access lets MacMaster show your Wi-Fi network name.</string>
-    <key>NSLocationWhenInUseUsageDescription</key><string>Location access lets MacMaster show your Wi-Fi network name. Your location is never read or stored.</string>
-    <key>NSCalendarsFullAccessUsageDescription</key><string>MacMaster shows your upcoming events and join links in the Clock popover. Events are read on demand and never stored or sent anywhere.</string>
-    <key>NSCalendarsUsageDescription</key><string>MacMaster shows your upcoming events and join links in the Clock popover. Events are read on demand and never stored or sent anywhere.</string>
-    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 Swaraj. Licensed under GPL-3.0.</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>MacMaster</string>
+	<key>CFBundleExecutable</key>
+	<string>MacMaster</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.macmaster.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>MacMaster</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.2.0</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>MacMaster uses System Events to read login items and to run maintenance actions you choose.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>MacMaster reads and toggles Bluetooth power from the menu bar Control Center.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>MacMaster shows your upcoming events and join links in the Clock popover. Events are read on demand and never stored or sent anywhere.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>MacMaster shows your upcoming events and join links in the Clock popover. Events are read on demand and never stored or sent anywhere.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Swaraj. Licensed under GPL-3.0.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Location access lets MacMaster show your Wi-Fi network name.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location access lets MacMaster show your Wi-Fi network name. Your location is never read or stored.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 </dict>
 </plist>

@@ -97,8 +97,16 @@ struct MouseActionEditor: View {
             HStack {
                 Text(title).frame(width: 110, alignment: .leading).foregroundStyle(.secondary)
                 Picker("", selection: $action.kind) {
-                    ForEach(allowed) { k in
-                        Label(k.title, systemImage: k.symbol).tag(k)
+                    if allowed.contains(.none) {
+                        Label(MouseActionKind.none.title, systemImage: MouseActionKind.none.symbol).tag(MouseActionKind.none)
+                    }
+                    ForEach(MouseActionKind.groups, id: \.title) { g in
+                        let kinds = g.kinds.filter { allowed.contains($0) }
+                        if !kinds.isEmpty {
+                            Section(g.title) {
+                                ForEach(kinds) { k in Label(k.title, systemImage: k.symbol).tag(k) }
+                            }
+                        }
                     }
                 }
                 .labelsHidden()

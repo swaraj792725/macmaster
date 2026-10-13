@@ -169,6 +169,9 @@ enum WindowPreviewEnumerator {
             guard info.layer == 0, info.alpha > 0.05, info.bounds.width >= 120, info.bounds.height >= 80 else { continue }
             if info.onScreen && !axFailed { continue }
             if !info.onScreen && info.name.isEmpty { continue }
+            // Off-screen, AX-invisible windows that are ordered out are closed/hidden leftovers
+            // (e.g. a dismissed welcome window), not windows on another desktop.
+            if !info.onScreen && !axFailed && WindowPreviewSpaces.isOrderedIn(info.id) == false { continue }
             let title = info.name.isEmpty ? app.name : info.name
             result.append(WindowPreviewWindow(
                 id: info.id, pid: app.pid, title: title, appName: app.name, bundleID: app.bundleID,
@@ -176,5 +179,23 @@ enum WindowPreviewEnumerator {
                 onOtherSpace: !info.onScreen, order: 15_000 + info.order, ax: nil))
         }
         return result.sorted { $0.order < $1.order }
+    }
+}
+
+/// Window state from SkyLight (resolved at runtime; unknown → nil, treated as "keep").
+enum WindowPreviewSpaces {
+    private typealias ConnFn = @convention(c) () -> Int32
+    private typealias OrderedInFn = @convention(c) (Int32, UInt32, UnsafeMutablePointer<UInt8>) -> Int32
+    private static let handle = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY)
+    private static let conn: Int32? = handle.flatMap { dlsym($0, "SLSMainConnectionID") }
+        .map { unsafeBitCast($0, to: ConnFn.self)() }
+    private static let orderedInFn: OrderedInFn? = handle.flatMap { dlsym($0, "SLSWindowIsOrderedIn") }
+        .map { unsafeBitCast($0, to: OrderedInFn.self) }
+
+    /// Windows on other Spaces stay ordered in; closed-but-alive windows don't.
+    static func isOrderedIn(_ id: CGWindowID) -> Bool? {
+        guard let conn, let orderedInFn else { return nil }
+        var v: UInt8 = 0
+        return orderedInFn(conn, id, &v) == 0 ? v != 0 : nil
     }
 }

@@ -39,8 +39,8 @@ final class ToolsClipboardMenuBar: NSObject, NSPopoverDelegate {
     @objc private func toggle() {
         guard let button = item?.button else { return }
         if popover.isShown { popover.performClose(nil); return }
-        let front = NSWorkspace.shared.frontmostApplication
-        previousApp = front?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : front
+        // The app to paste into: whatever was in front, or (if that's MacMaster itself) its own window.
+        previousApp = NSWorkspace.shared.frontmostApplication
         popover.contentSize = NSSize(width: 340, height: 460)
         popover.contentViewController = NSHostingController(rootView: ToolsClipboardPopoverView(bar: self))
         popover.showFromStatusItem(button)
@@ -62,19 +62,23 @@ final class ToolsClipboardMenuBar: NSObject, NSPopoverDelegate {
     /// Copies, then sends ⌘V to the app that was frontmost (needs Accessibility; otherwise just copies).
     func paste(_ item: ToolsClipboardItem) {
         ToolsClipboard.shared.copyBack(item)
-        close()
         guard AXIsProcessTrusted() else {
+            close()
             _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
             return
         }
-        let target = previousApp
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier {
-                target?.activate(options: [])
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { Self.sendCommandV() }
+        let target = previousApp ?? FrontAppTracker.lastExternal
+        // Take over focus handling from the popover so it doesn't race us.
+        FrontAppTracker.markDeliberate()
+        close()
+        guard let target, !FrontAppTracker.isSelf(target) else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Self.sendCommandV() }
+            return
         }
+        FrontAppTracker.activate(target) { Self.sendCommandV() }
     }
+
+    static var canPaste: Bool { AXIsProcessTrusted() }
 
     private static func sendCommandV() {
         let src = CGEventSource(stateID: .combinedSessionState)
@@ -174,7 +178,7 @@ private struct ToolsClipboardPopoverView: View {
                 .onKeyPress(.upArrow) { move(-1, in: list); return .handled }
                 .onSubmit {
                     guard let it = list.first(where: { $0.id == selected }) ?? list.first else { return }
-                    if NSEvent.modifierFlags.contains(.option) { bar.paste(it) } else { bar.copy(it) }
+                    if NSEvent.modifierFlags.contains(.option) || !ToolsClipboardMenuBar.canPaste { bar.copy(it) } else { bar.paste(it) }
                 }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -209,7 +213,8 @@ private struct ToolsClipboardPopoverView: View {
                     .toggleStyle(.switch).controlSize(.mini).font(.caption)
             }
             Spacer()
-            Text("⌥ click pastes").font(.caption2).foregroundStyle(.tertiary)
+            Text(ToolsClipboardMenuBar.canPaste ? "Click pastes · ⌥ click copies" : "Click copies")
+                .font(.caption2).foregroundStyle(.tertiary)
             Button("Clear history") { clip.clearUnpinned() }
                 .buttonStyle(.mmGhost)
                 .disabled(clip.items.allSatisfy(\.pinned))
@@ -236,8 +241,8 @@ private struct ToolsClipboardPopoverRow: View {
             Spacer(minLength: 4)
             if hover {
                 HStack(spacing: 8) {
-                    Button { bar.paste(item) } label: { Image(systemName: "arrow.down.doc") }
-                        .help(AXIsProcessTrusted() ? "Paste into the frontmost app" : "Copy (grant Accessibility to paste)")
+                    Button { bar.copy(item) } label: { Image(systemName: "doc.on.doc") }
+                        .help("Copy only")
                     Button { DropShelf.shared.add(clipboard: item.kind) } label: { Image(systemName: "tray.and.arrow.down") }
                         .help("Add to Shelf")
                     Button { clip.remove(item) } label: { Image(systemName: "trash") }.help("Delete")
@@ -256,7 +261,7 @@ private struct ToolsClipboardPopoverRow: View {
         .contentShape(Rectangle())
         .onHover { hover = $0 }
         .onTapGesture {
-            if NSEvent.modifierFlags.contains(.option) { bar.paste(item) } else { bar.copy(item) }
+            if NSEvent.modifierFlags.contains(.option) || !ToolsClipboardMenuBar.canPaste { bar.copy(item) } else { bar.paste(item) }
         }
     }
 

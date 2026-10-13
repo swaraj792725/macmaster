@@ -1,5 +1,21 @@
 # Releasing MacMaster
 
+## Versions, changelog and updates
+
+- Version lives in `Resources/Info.plist` (`CFBundleShortVersionString` = semver, `CFBundleVersion` = build number).
+- `CHANGELOG.md` gets a `## [x.y.z] - YYYY-MM-DD` section per release (`### Added/Changed/Fixed`, `- ` bullets).
+  It is copied into the app bundle and shown in the What's New window (app menu › What's New, and once after each update).
+- The app checks `https://api.github.com/repos/swaraj792725/macmaster/releases/latest` once a day (Settings › General › Updates,
+  or app menu › Check for Updates…). A release is "newer" when its tag (`v0.3.0`) beats the installed version. The Download
+  button opens the release's `.dmg` asset, or the release page. Nothing is installed automatically.
+
+One-step release:
+
+```sh
+scripts/release.sh 0.3.0            # bump Info.plist, commit, tag v0.3.0, build the DMG, print publish commands
+scripts/release.sh 0.3.0 --publish  # also push and create the GitHub Release with the DMG and changelog notes
+```
+
 ## Build a DMG (local test, not notarized)
 
 ```sh

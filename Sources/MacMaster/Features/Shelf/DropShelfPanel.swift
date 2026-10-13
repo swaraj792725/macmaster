@@ -164,6 +164,7 @@ final class DropShelfPanelController {
         open.allowsMultipleSelection = false
         open.prompt = move ? "Move Here" : "Copy Here"
         open.message = move ? "Choose where to move \(urls.count) item(s)." : "Choose where to copy \(urls.count) item(s)."
+        FrontAppTracker.markDeliberate()
         NSApp.activate()
         guard open.runModal() == .OK, let dest = open.url else { return }
 

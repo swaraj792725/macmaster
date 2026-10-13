@@ -15,6 +15,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/MacMaster"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp CHANGELOG.md "$APP/Contents/Resources/CHANGELOG.md"   # shown in the app's What's New window
 
 # Prefer a stable local identity so macOS privacy grants (Accessibility, Screen Recording)
 # survive rebuilds. Falls back to ad-hoc (grants must be re-approved after each build).

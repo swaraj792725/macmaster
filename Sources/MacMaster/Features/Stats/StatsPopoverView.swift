@@ -15,6 +15,7 @@ struct StatsPopoverView: View {
             HStack {
                 Spacer()
                 Button {
+                    FrontAppTracker.markDeliberate()
                     NSApp.activate()
                     NotificationCenter.default.post(name: Notification.Name("MacMaster.openSection"), object: module.openSection)
                     onOpen()

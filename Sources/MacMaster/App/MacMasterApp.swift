@@ -14,6 +14,13 @@ struct MacMasterApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    Task { await UpdateChecker.shared.check(userInitiated: true) }
+                    WhatsNewWindow.show()
+                }
+                Button("What's New in MacMaster") { WhatsNewWindow.show() }
+            }
             CommandMenu("Go") {
                 ForEach(Array(AppSection.allCases.enumerated()), id: \.element) { index, s in
                     let button = Button(s.title) { NotificationCenter.default.post(name: .openSection, object: s.rawValue) }
@@ -89,6 +96,7 @@ enum Services {
         MenuBarHooks.quickOptimize = { await OptimizerEngine.shared.quickOptimize() }
         MenuBarHooks.freeMemory = { await OptimizerEngine.shared.freeMemory() }
         if isSnapshotRun { return }
+        FrontAppTracker.start()
         CleanerScheduler.shared.start()
         StatsMenuBarController.shared.start()
         MouseEngine.shared.start()
@@ -107,6 +115,8 @@ enum Services {
         TilingEngine.shared.start()
         PowerScheduler.shared.start()
         KeyboardEngine.shared.start()
+        UpdateChecker.shared.start()
+        WhatsNewWindow.showIfUpdated()
     }
 }
 
@@ -116,6 +126,7 @@ struct AppSettingsView: View {
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var monitor = SystemMonitor.shared
     @State private var loginError: String?
+    @State private var updates = UpdateChecker.shared
 
     var body: some View {
         Form {
@@ -143,6 +154,26 @@ struct AppSettingsView: View {
                 .onChange(of: showMenuBarIcon) { _, _ in MainStatusItem.shared.update() }
             } header: { Text("General") } footer: {
                 Text("Hide the Dock icon to run MacMaster from the menu bar only.")
+            }
+            Section {
+                settingRow("Check for updates automatically", "arrow.triangle.2.circlepath", Theme.Palette.green) {
+                    Toggle("", isOn: Binding(get: { updates.autoCheck }, set: { updates.autoCheck = $0 }))
+                        .labelsHidden().toggleStyle(.switch)
+                }
+                HStack(spacing: 10) {
+                    IconTile(symbol: "shippingbox", colors: Theme.Palette.blue, size: 24)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Version \(UpdateChecker.currentVersion) (\(UpdateChecker.currentBuild))")
+                        if let d = updates.lastCheck {
+                            Text("Last checked \(d.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    UpdateStatusControl(compact: true)
+                }
+                Button("What's New…") { WhatsNewWindow.show() }
+            } header: { Text("Updates") } footer: {
+                Text("Looks for new releases on GitHub once a day. Nothing is installed without you.")
             }
             Section("Monitoring") {
                 settingRow("Sample interval", "timer", Theme.Palette.indigo) {

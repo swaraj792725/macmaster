@@ -129,7 +129,7 @@ enum AppSearchIndex {
         SearchEntry(.mouse, crumb: "Scrolling", "Control + scroll is fast", "modifier keys fast", anchor: "mouse.scrolling"),
         SearchEntry(.mouse, crumb: "Scrolling", "Command + scroll passes through untouched", "zoom modifier", anchor: "mouse.scrolling"),
         SearchEntry(.mouse, crumb: "Buttons", "Button remapping", "extra buttons back forward middle click double click hold actions", anchor: "mouse.buttons"),
-        SearchEntry(.mouse, crumb: "Gestures", "Click and drag gestures", "gesture button drag left right up down distance", anchor: "mouse.gestures"),
+        SearchEntry(.mouse, crumb: "Buttons", "Hold and drag", "gesture drag spaces mission control horizontal scroll grab left right up down distance", anchor: "mouse.buttons"),
         SearchEntry(.mouse, crumb: "Pointer", "Disable pointer acceleration", "flat movement tracking speed", anchor: "mouse.pointer"),
         SearchEntry(.mouse, crumb: "Pointer", "Custom pointer speed", "cursor speed sensitivity", anchor: "mouse.pointer"),
         SearchEntry(.mouse, crumb: "Test area", "Test area", "try scrolling buttons device", anchor: "mouse.test"),

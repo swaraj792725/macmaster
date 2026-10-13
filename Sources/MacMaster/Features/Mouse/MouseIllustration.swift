@@ -7,6 +7,7 @@ func mouseButtonName(_ n: Int) -> String {
     case 2: return "Middle button"
     case 3: return "Button 4 (side, back)"
     case 4: return "Button 5 (side, forward)"
+    case 5...8: return "Button \(n + 1) (extra)"
     default: return "Button \(n + 1)"
     }
 }
@@ -15,7 +16,6 @@ func mouseButtonName(_ n: Int) -> String {
 struct MouseIllustration: View {
     @Binding var selected: Int
     let mappings: [Int: MouseButtonMapping]
-    let gestureButton: Int?
 
     private let w: CGFloat = 150
     private let h: CGFloat = 230
@@ -56,15 +56,21 @@ struct MouseIllustration: View {
                 .frame(width: 20, height: 46)
                 .padding(.top, 28)
 
-                // Side buttons
-                part(button: 3, pressed: pressed) { Capsule() }
+                // Side buttons: forward (5) sits toward the front, back (4) behind it, like most mice.
+                part(button: 4, pressed: pressed) { Capsule() }
                     .frame(width: 11, height: 34)
                     .offset(x: -w / 2 + 3, y: 118)
-                part(button: 4, pressed: pressed) { Capsule() }
+                part(button: 3, pressed: pressed) { Capsule() }
                     .frame(width: 11, height: 34)
                     .offset(x: -w / 2 + 3, y: 158)
             }
             .frame(width: w + 40, height: h + 10, alignment: .top)
+            // Press any extra button on the real mouse to jump to its settings.
+            .onChange(of: pressed) { _, now in
+                if let b = now.filter({ $0 >= 2 }).min(), b != selected {
+                    withAnimation(.snappy(duration: 0.2)) { selected = b }
+                }
+            }
         }
     }
 
@@ -72,7 +78,7 @@ struct MouseIllustration: View {
     private func part<S: InsettableShape>(button: Int, pressed: Set<Int>, @ViewBuilder shape: () -> S) -> some View {
         let isSel = selected == button
         let isDown = pressed.contains(button)
-        let mapped = mappings[button]?.isManaged == true || gestureButton == button
+        let mapped = mappings[button]?.isManaged == true
         let base: Color = isDown ? .white : (isSel ? Theme.Palette.mouse[0] : (mapped ? Theme.Palette.mouse[1] : .white.opacity(0.3)))
         shape()
             .fill(base.opacity(isSel || isDown || mapped ? 1 : 0.8))

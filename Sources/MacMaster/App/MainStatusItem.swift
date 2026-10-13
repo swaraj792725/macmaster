@@ -66,6 +66,7 @@ final class MainStatusItem: NSObject, NSPopoverDelegate {
 @MainActor
 enum MainWindow {
     static func show(section: AppSection? = nil) {
+        FrontAppTracker.markDeliberate()
         NSApp.activate(ignoringOtherApps: true)
         if let w = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "MacMaster" }) {
             w.makeKeyAndOrderFront(nil)

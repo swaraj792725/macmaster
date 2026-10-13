@@ -158,11 +158,17 @@ final class MouseTapCore: @unchecked Sendable {
 
     private struct ButtonState {
         var mapping = MouseButtonMapping()
-        var isGesture = false
         var firedOnDown = false
         var holdFired = false
-        var gestureFired = false
-        var accX = 0.0, accY = 0.0
+        /// Moved past the slop with a drag mode set: no click on release.
+        var dragging = false
+        var totalX = 0.0, totalY = 0.0      // since the press, for the slop test
+        var accX = 0.0, accY = 0.0          // since the last fired drag step
+        var firedDirections: Set<Int> = []  // non-repeatable actions fire once per direction
+        var scrollBegan = false
+        var remX = 0.0, remY = 0.0          // fractional scroll pixels carried over
+        var anchor = CGPoint.zero
+        var frozeCursor = false
         var holdTimer: CFRunLoopTimer?
     }
     private var buttons: [Int: ButtonState] = [:]
@@ -174,6 +180,7 @@ final class MouseTapCore: @unchecked Sendable {
     private static let pixelsPerTick = 56.0
     private static let holdDelay = 0.4
     private static let doubleClickWindow = 0.28
+    private static let dragSlop = 5.0
 
     init(config: OSAllocatedUnfairLock<MouseConfig>) {
         self.config = config
@@ -209,7 +216,10 @@ final class MouseTapCore: @unchecked Sendable {
             CFRunLoopPerformBlock(rl, CFRunLoopMode.commonModes.rawValue) { [self] in
                 for (_, t) in pendingClicks { CFRunLoopTimerInvalidate(t) }
                 pendingClicks.removeAll()
-                for (_, s) in buttons { if let t = s.holdTimer { CFRunLoopTimerInvalidate(t) } }
+                for (_, s) in buttons {
+                    if let t = s.holdTimer { CFRunLoopTimerInvalidate(t) }
+                    if s.frozeCursor { CGAssociateMouseAndMouseCursorPosition(1) }
+                }
                 buttons.removeAll()
                 if let src = source { CFRunLoopRemoveSource(rl, src, .commonModes); CFRunLoopSourceInvalidate(src) }
                 if let t = tap { CGEvent.tapEnable(tap: t, enable: false); CFMachPortInvalidate(t) }
@@ -392,17 +402,16 @@ final class MouseTapCore: @unchecked Sendable {
         telemetry.recordButton(b, down: true)
         let cfg = config.withLock { $0 }
         let mapping = cfg.mappings[b] ?? MouseButtonMapping()
-        let isGesture = cfg.gestureEnabled && cfg.gestureButton == b
-        guard isGesture || mapping.isManaged else { return Unmanaged.passUnretained(event) }
+        guard mapping.isManaged else { return Unmanaged.passUnretained(event) }
 
         var st = ButtonState()
         st.mapping = mapping
-        st.isGesture = isGesture
+        st.anchor = event.location
         if mapping.hold.kind != .none {
             st.holdTimer = makeTimer(after: Self.holdDelay) { [weak self] in self?.holdFired(b) }
         }
         let clickIsReplay = mapping.click.kind == .none || mapping.click.kind == .middleClick
-        let deferred = isGesture || mapping.hold.kind != .none || mapping.doubleClick.kind != .none || clickIsReplay
+        let deferred = mapping.drag != .none || mapping.hold.kind != .none || mapping.doubleClick.kind != .none || clickIsReplay
         if !deferred {
             MouseActionRunner.run(mapping.click, button: b)
             st.firedOnDown = true
@@ -414,33 +423,96 @@ final class MouseTapCore: @unchecked Sendable {
     private func handleButtonDrag(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let b = Int(event.getIntegerValueField(.mouseEventButtonNumber))
         guard var st = buttons[b] else { return Unmanaged.passUnretained(event) }
-        if st.isGesture, !st.gestureFired, !st.holdFired {
-            let cfg = config.withLock { $0 }
-            st.accX += event.getDoubleValueField(.mouseEventDeltaX)
-            st.accY += event.getDoubleValueField(.mouseEventDeltaY)
-            if hypot(st.accX, st.accY) >= cfg.gestureThreshold {
-                st.gestureFired = true
-                if let t = st.holdTimer { CFRunLoopTimerInvalidate(t); st.holdTimer = nil }
+        let mode = st.mapping.drag
+        // The original drag is always suppressed while a managed button is down.
+        guard mode != .none, !st.holdFired, !st.firedOnDown else { return nil }
+        let dx = event.getDoubleValueField(.mouseEventDeltaX)
+        let dy = event.getDoubleValueField(.mouseEventDeltaY)
+        st.totalX += dx; st.totalY += dy
+        st.accX += dx; st.accY += dy
+
+        if !st.dragging {
+            guard hypot(st.totalX, st.totalY) >= Self.dragSlop else { buttons[b] = st; return nil }
+            st.dragging = true
+            if let t = st.holdTimer { CFRunLoopTimerInvalidate(t); st.holdTimer = nil }
+            if mode == .scroll || mode == .horizontalScroll {
+                // Keep the pointer still so the scroll target stays under it (like grabbing the page).
+                CGAssociateMouseAndMouseCursorPosition(0)
+                st.frozeCursor = true
+            }
+        }
+
+        let cfg = config.withLock { $0 }
+        let threshold = max(10, cfg.gestureThreshold)
+        switch mode {
+        case .none:
+            break
+        case .scroll, .horizontalScroll:
+            postDragScroll(&st, dx: st.accX, dy: mode == .horizontalScroll ? 0 : st.accY, phaseEnd: false)
+            st.accX = 0; st.accY = 0
+        case .spaces:
+            if abs(st.accX) >= threshold, abs(st.accX) >= abs(st.accY) {
+                // Drag left → the Space on the right comes in, like a trackpad swipe.
+                MouseActionRunner.run(MouseAction(st.accX < 0 ? .spaceRight : .spaceLeft), button: b)
+                st.accX = 0; st.accY = 0
+            } else if abs(st.accY) >= threshold, abs(st.accY) > abs(st.accX) {
+                let dir = st.accY < 0 ? 2 : 3
+                if !st.firedDirections.contains(dir) {
+                    st.firedDirections.insert(dir)
+                    MouseActionRunner.run(MouseAction(dir == 2 ? .missionControl : .appExpose), button: b)
+                }
+                st.accX = 0; st.accY = 0
+            }
+        case .custom:
+            if hypot(st.accX, st.accY) >= threshold {
+                let m = st.mapping
+                let dir: Int
                 let action: MouseAction
                 if abs(st.accX) > abs(st.accY) {
-                    action = st.accX < 0 ? cfg.gestureLeft : cfg.gestureRight
+                    dir = st.accX < 0 ? 0 : 1
+                    action = dir == 0 ? m.dragLeft : m.dragRight
                 } else {
-                    action = st.accY < 0 ? cfg.gestureUp : cfg.gestureDown
+                    dir = st.accY < 0 ? 2 : 3
+                    action = dir == 2 ? m.dragUp : m.dragDown
                 }
-                MouseActionRunner.run(action, button: b)
+                if action.kind.repeatsWhileDragging || !st.firedDirections.contains(dir) {
+                    st.firedDirections.insert(dir)
+                    MouseActionRunner.run(action, button: b)
+                }
+                st.accX = 0; st.accY = 0
             }
-            buttons[b] = st
         }
-        return nil // original drag suppressed while a managed button is down
+        buttons[b] = st
+        return nil
+    }
+
+    /// Grab-and-drag scrolling: pixel-precise, trackpad-like (continuous + phases) scroll events at the press point.
+    private func postDragScroll(_ st: inout ButtonState, dx: Double, dy: Double, phaseEnd: Bool) {
+        st.remX += dx; st.remY += dy
+        let ix = st.remX.rounded(.towardZero), iy = st.remY.rounded(.towardZero)
+        st.remX -= ix; st.remY -= iy
+        if !phaseEnd && ix == 0 && iy == 0 { return }
+        if phaseEnd && !st.scrollBegan { return }
+        guard let e = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2,
+                              wheel1: Int32(iy), wheel2: Int32(ix), wheel3: 0) else { return }
+        e.setIntegerValueField(.eventSourceUserData, value: mouseSyntheticMagic)
+        e.setIntegerValueField(.scrollWheelEventIsContinuous, value: 1)
+        e.setIntegerValueField(.scrollWheelEventScrollPhase, value: phaseEnd ? 4 : (st.scrollBegan ? 2 : 1))
+        e.setIntegerValueField(.scrollWheelEventMomentumPhase, value: 0)
+        e.location = st.anchor
+        e.post(tap: .cgSessionEventTap)
+        st.scrollBegan = true
     }
 
     private func handleButtonUp(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let b = Int(event.getIntegerValueField(.mouseEventButtonNumber))
         telemetry.recordButton(b, down: false)
-        guard let st = buttons[b] else { return Unmanaged.passUnretained(event) }
+        guard var st = buttons[b] else { return Unmanaged.passUnretained(event) }
         buttons[b] = nil
         if let t = st.holdTimer { CFRunLoopTimerInvalidate(t) }
-        if st.firedOnDown || st.holdFired || st.gestureFired { return nil }
+        if st.frozeCursor { CGAssociateMouseAndMouseCursorPosition(1) }
+        if st.scrollBegan { postDragScroll(&st, dx: 0, dy: 0, phaseEnd: true) }
+        if st.firedOnDown || st.holdFired || st.dragging { return nil }
 
         let m = st.mapping
         if m.doubleClick.kind != .none {
@@ -461,7 +533,7 @@ final class MouseTapCore: @unchecked Sendable {
     }
 
     private func holdFired(_ b: Int) {
-        guard var st = buttons[b], !st.gestureFired, !st.holdFired else { return }
+        guard var st = buttons[b], !st.dragging, !st.holdFired else { return }
         st.holdFired = true
         st.holdTimer = nil
         buttons[b] = st

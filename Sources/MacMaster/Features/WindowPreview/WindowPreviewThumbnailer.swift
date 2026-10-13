@@ -130,13 +130,20 @@ actor WindowPreviewThumbnailer {
 
         // Stage Manager shows non-active windows shrunk and tilted in its side strip, and SCK captures
         // them exactly like that. Keep the last clean image instead of replacing it with a skewed one.
+        var provisional = false
         if WindowPreviewStageManager.isEnabled {
             let pid = scWindow.owningApplication?.processID
             let real = pid.flatMap { WindowPreviewStageManager.realSize(pid: $0, id: id) } ?? cleanSize[id]
             let shrunk = real.map { frame.width < $0.width * 0.92 || frame.height < $0.height * 0.92 }
                 ?? WindowPreviewStageManager.looksLikeStrip(frame)
-            if shrunk { return cache[id]?.image }
-            cleanSize[id] = frame.size
+            if shrunk {
+                if let cached = cache[id]?.image { return cached }
+                // Never seen this window un-shrunk (e.g. an app you haven't switched to since launch):
+                // a strip-sized capture beats an icon-only tile. Marked stale so a clean one replaces it.
+                provisional = true
+            } else {
+                cleanSize[id] = frame.size
+            }
         }
 
         let scale = min(box.width / frame.width, box.height / frame.height, 2)
@@ -148,17 +155,19 @@ actor WindowPreviewThumbnailer {
         let filter = SCContentFilter(desktopIndependentWindow: scWindow)
         guard let image = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
             failed[id] = Date()
-            return nil
+            return cache[id]?.image
         }
 
-        store(image, id: id, wantWidth: wantWidth)
+        store(image, id: id, wantWidth: wantWidth, provisional: provisional)
         return image
     }
 
-    private func store(_ image: CGImage, id: UInt32, wantWidth: Int) {
+    private func store(_ image: CGImage, id: UInt32, wantWidth: Int, provisional: Bool = false) {
         failed[id] = nil
-        cache[id] = Entry(image: image, date: Date(), pixelWidth: wantWidth) // requested box width, not the aspect-fitted one
-        Self.save(image, id: id)
+        // Requested box width, not the aspect-fitted one. Provisional (strip-sized) images are dated in the
+        // past so the next un-shrunk sighting recaptures; they're kept in memory only.
+        cache[id] = Entry(image: image, date: provisional ? .distantPast : Date(), pixelWidth: wantWidth)
+        if !provisional { Self.save(image, id: id) }
         if cache.count > maxEntries {
             let drop = cache.sorted { $0.value.date < $1.value.date }.prefix(cache.count - maxEntries)
             for (k, _) in drop { cache[k] = nil }

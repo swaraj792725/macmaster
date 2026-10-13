@@ -7,9 +7,9 @@ struct MouseView: View {
 
     var body: some View {
         Page(jump: [PageJump("mouse.scrolling", "Scrolling"), PageJump("mouse.buttons", "Buttons"),
-                    PageJump("mouse.gestures", "Gestures"), PageJump("mouse.pointer", "Pointer"),
+                    PageJump("mouse.pointer", "Pointer"),
                     PageJump("mouse.test", "Test area")]) {
-            PageHeader(title: "Mouse", subtitle: "Smooth scrolling, button remapping and gestures for external mice",
+            PageHeader(title: "Mouse", subtitle: "Smooth scrolling, button remapping and hold-and-drag actions for external mice",
                        symbol: "computermouse.fill", colors: Theme.Palette.mouse) {
                 HStack(spacing: 12) {
                     StatusPill(text: engine.status.text, color: statusColor)
@@ -26,7 +26,6 @@ struct MouseView: View {
             Group {
                 scrollingCard.searchAnchor("mouse.scrolling")
                 buttonsCard.searchAnchor("mouse.buttons")
-                gesturesCard.searchAnchor("mouse.gestures")
                 pointerCard.searchAnchor("mouse.pointer")
                 MouseTestArea(engine: engine).searchAnchor("mouse.test")
             }
@@ -156,57 +155,106 @@ struct MouseView: View {
     private var buttonsCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionTitle(text: "Buttons", symbol: "computermouse")
-            Text("Tap a button on the mouse to choose what it does. Use the test area below to find the number of any button.")
+            Text("Press a button on your mouse (or pick one below) to choose what it does. Left and right buttons are never changed.")
                 .font(.callout).foregroundStyle(.secondary)
 
             HStack(alignment: .top, spacing: 24) {
-                MouseIllustration(selected: $selectedButton,
-                                  mappings: settings.config.mappings,
-                                  gestureButton: settings.config.gestureEnabled ? settings.config.gestureButton : nil)
+                MouseIllustration(selected: $selectedButton, mappings: settings.config.mappings)
                     .frame(width: 190)
 
                 VStack(alignment: .leading, spacing: 10) {
                     buttonChips
-                    Text(mouseButtonName(selectedButton)).font(.headline)
-                    if settings.config.gestureEnabled && settings.config.gestureButton == selectedButton {
-                        Label("This button is the gesture button — hold and drag to trigger gestures; the click actions below fire when you release without dragging.",
-                              systemImage: "hand.draw")
-                            .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Text(mouseButtonName(selectedButton)).font(.headline)
+                        Spacer()
+                        Button("Reset button") { settings.config.mappings[selectedButton] = nil }
+                            .controlSize(.small)
+                            .disabled(settings.config.mappings[selectedButton] == nil)
                     }
                     MouseActionEditor(title: "Click", action: mappingBinding(\.click))
                     MouseActionEditor(title: "Double click", action: mappingBinding(\.doubleClick))
-                    MouseActionEditor(title: "Hold", action: mappingBinding(\.hold))
-                    Text("Double-click and hold actions add a short delay to a plain click of that button.")
+                    MouseActionEditor(title: "Long press", action: mappingBinding(\.hold))
+                    Divider().padding(.vertical, 2)
+                    dragEditor
+                    Text("Double click and long press add a short delay before a plain click of that button fires.")
                         .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Clear this button") {
-                            settings.config.mappings[selectedButton] = nil
-                        }
-                        .disabled(settings.config.mappings[selectedButton] == nil)
-                    }
                 }
             }
         }
         .card()
     }
 
+    private var dragMode: Binding<MouseDragMode> {
+        let b = selectedButton
+        return Binding(
+            get: { settings.config.mappings[b]?.drag ?? .none },
+            set: { newValue in
+                var m = settings.config.mappings[b] ?? MouseButtonMapping()
+                m.drag = newValue
+                settings.config.mappings[b] = m
+            })
+    }
+
+    @ViewBuilder
+    private var dragEditor: some View {
+        let mode = dragMode.wrappedValue
+        HStack {
+            Text("Hold & drag").frame(width: 110, alignment: .leading).foregroundStyle(.secondary)
+            Picker("", selection: dragMode) {
+                ForEach(MouseDragMode.allCases) { Text($0.title).tag($0) }
+            }
+            .labelsHidden().frame(maxWidth: 260)
+            Spacer(minLength: 0)
+        }
+        if mode != .none {
+            HStack(alignment: .top) {
+                Spacer().frame(width: 110)
+                Text(mode.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        if mode == .spaces || mode == .custom {
+            HStack {
+                Text("Drag distance").frame(width: 110, alignment: .leading).foregroundStyle(.secondary)
+                Slider(value: $settings.config.gestureThreshold, in: 20...200).frame(maxWidth: 200)
+                Text("\(Int(settings.config.gestureThreshold)) pt").monospacedDigit().frame(width: 48, alignment: .trailing)
+            }
+        }
+        if mode == .custom {
+            MouseActionEditor(title: "← Drag left", action: mappingBinding(\.dragLeft))
+            MouseActionEditor(title: "→ Drag right", action: mappingBinding(\.dragRight))
+            MouseActionEditor(title: "↑ Drag up", action: mappingBinding(\.dragUp))
+            MouseActionEditor(title: "↓ Drag down", action: mappingBinding(\.dragDown))
+        }
+    }
+
     private var buttonChips: some View {
         HStack(spacing: 6) {
-            ForEach([2, 3, 4, 5, 6, 7], id: \.self) { b in
+            ForEach(2...9, id: \.self) { b in
                 Button {
                     selectedButton = b
                 } label: {
                     VStack(spacing: 1) {
-                        Text("#\(b)").font(.caption.weight(.bold))
+                        Text(Self.chipName(b)).font(.caption.weight(.bold))
                         Text(settings.mapping(b).isManaged ? "mapped" : "default")
-                            .font(.system(size: 9)).foregroundStyle(.secondary)
+                            .font(.system(size: 9)).foregroundStyle(settings.mapping(b).isManaged ? Theme.Palette.mouse[0] : .secondary)
                     }
-                    .padding(.horizontal, 10).padding(.vertical, 5)
-                    .background(selectedButton == b ? Theme.Palette.mouse[1].opacity(0.35) : Color.white.opacity(0.06),
+                    .frame(minWidth: 44)
+                    .padding(.horizontal, 6).padding(.vertical, 5)
+                    .background(selectedButton == b ? Theme.Palette.mouse[1].opacity(0.35) : Color.primary.opacity(0.06),
                                 in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .help(mouseButtonName(b))
             }
+        }
+    }
+
+    private static func chipName(_ b: Int) -> String {
+        switch b {
+        case 2: return "Middle"
+        case 3: return "Back"
+        case 4: return "Forward"
+        default: return "#\(b + 1)"
         }
     }
 
@@ -219,43 +267,6 @@ struct MouseView: View {
                 m[keyPath: kp] = newValue
                 settings.config.mappings[b] = m
             })
-    }
-
-    // MARK: Gestures
-
-    private var gesturesCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionTitle(text: "Gestures", symbol: "hand.draw")
-            Toggle(isOn: $settings.config.gestureEnabled) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Click and drag gestures").fontWeight(.semibold)
-                    Text("Hold a button and drag in a direction. The original click is suppressed while dragging.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.mmSwitch)
-
-            if settings.config.gestureEnabled {
-                HStack {
-                    Text("Gesture button").frame(width: 110, alignment: .leading).foregroundStyle(.secondary)
-                    Picker("", selection: $settings.config.gestureButton) {
-                        ForEach([2, 3, 4, 5, 6, 7], id: \.self) { Text("#\($0) — \(mouseButtonName($0).components(separatedBy: " (").first ?? "")").tag($0) }
-                    }
-                    .labelsHidden().frame(maxWidth: 240)
-                }
-                HStack {
-                    Text("Distance").frame(width: 110, alignment: .leading).foregroundStyle(.secondary)
-                    Slider(value: $settings.config.gestureThreshold, in: 20...200).frame(maxWidth: 240)
-                    Text("\(Int(settings.config.gestureThreshold)) px").monospacedDigit().frame(width: 56, alignment: .trailing)
-                }
-                Divider()
-                MouseActionEditor(title: "← Drag left", action: $settings.config.gestureLeft)
-                MouseActionEditor(title: "→ Drag right", action: $settings.config.gestureRight)
-                MouseActionEditor(title: "↑ Drag up", action: $settings.config.gestureUp)
-                MouseActionEditor(title: "↓ Drag down", action: $settings.config.gestureDown)
-            }
-        }
-        .card()
     }
 
     // MARK: Pointer
