@@ -80,24 +80,52 @@ struct PageHeader<Accessory: View>: View {
 }
 
 /// Scrollable page with standard padding. Use for every feature screen.
+/// `jump` adds a sticky bar of capsules that scroll to `.searchAnchor(id)` cards. Global search also scrolls here.
 struct Page<Content: View>: View {
     var spacing: CGFloat = Theme.spacing
+    var jump: [PageJump] = []
     @ViewBuilder var content: () -> Content
+    @State private var router = AppSearchRouter.shared
 
-    init(spacing: CGFloat = Theme.spacing, @ViewBuilder content: @escaping () -> Content) {
+    init(spacing: CGFloat = Theme.spacing, jump: [PageJump] = [], @ViewBuilder content: @escaping () -> Content) {
         self.spacing = spacing
+        self.jump = jump
         self.content = content
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: spacing) { content() }
-                .padding(.horizontal, Theme.pagePadding)
-                .padding(.top, 18)
-                .padding(.bottom, Theme.pagePadding)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: spacing) { content() }
+                    .padding(.horizontal, Theme.pagePadding)
+                    .padding(.top, 18)
+                    .padding(.bottom, Theme.pagePadding)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .scrollIndicators(.automatic)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !jump.isEmpty {
+                    PageJumpBar(items: jump) { id in
+                        withAnimation(.smooth(duration: 0.35)) { proxy.scrollTo(id, anchor: .top) }
+                    }
+                }
+            }
+            .onAppear { consumeSearch(proxy) }
+            .onChange(of: router.tick) { _, _ in consumeSearch(proxy) }
         }
-        .scrollIndicators(.automatic)
+    }
+
+    /// Scroll to and flash the anchor a search result asked for (after any tab switch has rendered).
+    private func consumeSearch(_ proxy: ScrollViewProxy) {
+        guard let target = router.pending else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(target.tab == nil ? 250 : 450))
+            guard router.pending == target else { return }
+            router.pending = nil
+            guard let anchor = target.anchor else { return }
+            withAnimation(.smooth(duration: 0.35)) { proxy.scrollTo(anchor, anchor: .top) }
+            router.flash(anchor)
+        }
     }
 }
 

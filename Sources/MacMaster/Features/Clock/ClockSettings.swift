@@ -41,6 +41,7 @@ final class ClockSettings {
         static let customOn = "mm.clock.customOn", custom = "mm.clock.custom"
         static let secondOn = "mm.clock.secondOn", secondID = "mm.clock.secondZone", secondLabel = "mm.clock.secondLabel"
         static let world = "mm.clock.world", weeks = "mm.clock.weekNumbers", nextEvent = "mm.clock.nextEvent"
+        static let worldMap = "mm.clock.worldMap"
     }
 
     private func save(_ v: Any, _ key: String) {
@@ -63,6 +64,8 @@ final class ClockSettings {
     var secondZoneLabel: String { didSet { save(secondZoneLabel, K.secondLabel) } }
     var worldClocks: [String] { didSet { UserDefaults.standard.set(worldClocks, forKey: K.world) } }
     var showWeekNumbers: Bool { didSet { UserDefaults.standard.set(showWeekNumbers, forKey: K.weeks) } }
+    /// Dotted day/night world map above the world clocks.
+    var showWorldMap: Bool { didSet { UserDefaults.standard.set(showWorldMap, forKey: K.worldMap) } }
     /// Appends "· Standup in 12 min" to the menu bar title (needs Calendars access; off by default).
     var showNextEvent: Bool {
         didSet {
@@ -87,6 +90,7 @@ final class ClockSettings {
         secondZoneLabel = d.string(forKey: K.secondLabel) ?? ""
         worldClocks = (d.stringArray(forKey: K.world) ?? []).filter { TimeZone(identifier: $0) != nil }
         showWeekNumbers = bool(K.weeks, false)
+        showWorldMap = bool(K.worldMap, true)
         showNextEvent = bool(K.nextEvent, false)
     }
 

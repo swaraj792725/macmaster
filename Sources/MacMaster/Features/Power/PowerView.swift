@@ -41,6 +41,7 @@ struct PowerView: View {
             .transition(.opacity)
         }
         .animation(.smooth(duration: 0.25), value: tabRaw)
+        .searchTab(raw: $tabRaw)
         .onAppear { PowerScheduler.shared.start() }
     }
 }

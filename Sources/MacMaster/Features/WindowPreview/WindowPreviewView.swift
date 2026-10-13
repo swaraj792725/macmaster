@@ -19,9 +19,9 @@ struct WindowPreviewView: View {
 
             WindowPreviewSwitcherMock(settings: settings)
 
-            switcherSection
-            keysSection
-            dockSection
+            switcherSection.searchAnchor("windows.switcher")
+            keysSection.searchAnchor("windows.keys")
+            dockSection.searchAnchor("windows.dock")
         }
         .onAppear { WindowPreviewController.shared.start() }
     }

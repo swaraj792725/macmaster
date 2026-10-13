@@ -1,27 +1,23 @@
 import SwiftUI
 import AppKit
 
-/// The Control Center popover: header, flexible tile grid, footer. The pencil in the header switches to edit mode.
-struct ControlCenterPopoverView: View {
-    static let width: CGFloat = ControlCenterMetrics.width
+/// The Control Center tile grid, embedded in MacMaster's dropdown. Order, size and visibility come from
+/// `ControlCenterSettings`; `editing` turns on drag-to-reorder, resize and hide badges.
+struct ControlCenterTilesView: View {
+    @Binding var editing: Bool
 
     private let model = ControlCenterModel.shared
     private let audio = ControlCenterAudio.shared
     private let settings = ControlCenterSettings.shared
     private let awake = ToolsKeepAwake.shared
     private let engine = KeyboardEngine.shared
-    private let battery = BatteryMonitor.shared
+    private let menu = MenuBarModel.shared
 
-    @State private var editing = false
-
-    private static let headerHeight: CGFloat = 26
-    private static let footerHeight: CGFloat = 28
-
-    /// Height before SwiftUI measures the real content, so the popover doesn't open at the wrong size.
+    /// Grid height for the current layout, so the dropdown can open at roughly the right size.
+    @MainActor
     static func estimatedHeight() -> CGFloat {
         let tiles = ControlCenterSettings.shared.visibleTiles.filter { ControlCenterModel.shared.isAvailable($0) }
-        let grid = ControlCenterPacker.pack(tiles).height
-        return grid + headerHeight + footerHeight + 2 * 10 + 2 * ControlCenterMetrics.padding
+        return ControlCenterPacker.pack(tiles).height
     }
 
     private var tiles: [ControlCenterTile] {
@@ -30,7 +26,6 @@ struct ControlCenterPopoverView: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            header
             if let m = model.message { banner(m) }
             if tiles.isEmpty {
                 emptyState
@@ -38,53 +33,10 @@ struct ControlCenterPopoverView: View {
                 ControlCenterGrid(tiles: tiles, editing: editing) { t, size in tileContent(t, size) }
             }
             if editing { editTray }
-            footer
-        }
-        .padding(ControlCenterMetrics.padding)
-        .frame(width: Self.width)
-        .background(alignment: .top) {
-            LinearGradient(colors: [Color.accentColor.opacity(0.10), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4))
-                .allowsHitTesting(false)
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: model.message)
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: editing)
-        .onAppear { battery.refresh() }
-    }
-
-    // MARK: Header
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Text(editing ? "Edit layout" : "Control Center")
-                .font(.system(size: 13, weight: .semibold))
-            Spacer(minLength: 0)
-            if editing {
-                Menu {
-                    ForEach(ControlCenterPreset.allCases) { p in
-                        Button { withAnimation { settings.apply(p) } } label: { Label(p.title, systemImage: p.symbol) }
-                    }
-                    Divider()
-                    Button("Reset layout") { withAnimation { settings.resetLayout() } }
-                } label: {
-                    Label("Presets", systemImage: "square.grid.2x2")
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                Button { editing = false } label: { Text("Done").fontWeight(.semibold) }
-                    .buttonStyle(.mmGhost)
-            } else {
-                Button { editing = true } label: {
-                    Image(systemName: "slider.horizontal.below.square.and.square.filled")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 26, height: 22)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Edit tiles: reorder, resize, hide")
-            }
-        }
-        .frame(height: Self.headerHeight)
+        .onAppear { model.opened(); menu.refresh() }
+        .onDisappear { model.closed() }
     }
 
     private var emptyState: some View {
@@ -230,6 +182,10 @@ struct ControlCenterPopoverView: View {
         case .micMute:
             return TileState(on: audio.micMuted, subtitle: audio.micMuted ? "Muted" : "Live", action: audio.toggleMic,
                              title: "Mic", symbol: audio.micMuted ? "mic.slash.fill" : "mic.fill")
+        case .hideDesktop: return TileState(on: menu.isOn(.hideDesktop), subtitle: menu.isOn(.hideDesktop) ? "Hidden" : "Shown", action: { menu.toggle(.hideDesktop) })
+        case .hiddenFiles: return TileState(on: menu.isOn(.hiddenFiles), subtitle: menu.isOn(.hiddenFiles) ? "Visible" : "Hidden", action: { menu.toggle(.hiddenFiles) })
+        case .smoothScroll: return TileState(on: menu.isOn(.smoothScroll), subtitle: menu.isOn(.smoothScroll) ? "On" : "Off", action: { menu.toggle(.smoothScroll) })
+        case .windowSwitcher: return TileState(on: menu.isOn(.windowSwitcher), subtitle: menu.isOn(.windowSwitcher) ? "On" : "Off", action: { menu.toggle(.windowSwitcher) })
         default:
             return TileState(on: false, subtitle: "", action: {})
         }
@@ -246,36 +202,5 @@ struct ControlCenterPopoverView: View {
         .foregroundStyle(Color.orange)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private var footer: some View {
-        HStack(spacing: 6) {
-            if battery.reading.isPresent {
-                HStack(spacing: 4) {
-                    Image(systemName: batterySymbol)
-                    Text(Fmt.percent(battery.reading.percent)).monospacedDigit()
-                }
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 0)
-            Button { model.openMacMaster() } label: { Label("MacMaster", systemImage: "square.grid.2x2.fill").labelStyle(.titleAndIcon) }
-                .buttonStyle(.mmGhost)
-            Button { model.openSystemSettings() } label: { Label("Settings", systemImage: "gearshape.fill").labelStyle(.titleAndIcon) }
-                .buttonStyle(.mmGhost)
-        }
-        .font(.caption)
-        .frame(height: Self.footerHeight)
-    }
-
-    private var batterySymbol: String {
-        let r = battery.reading
-        if r.isCharging || r.isPluggedIn { return SymbolKit.firstAvailable(["battery.100percent.bolt", "bolt.fill"]) }
-        switch r.percent {
-        case ..<0.13: return "battery.0percent"
-        case ..<0.38: return "battery.25percent"
-        case ..<0.63: return "battery.50percent"
-        case ..<0.88: return "battery.75percent"
-        default: return "battery.100percent"
-        }
     }
 }

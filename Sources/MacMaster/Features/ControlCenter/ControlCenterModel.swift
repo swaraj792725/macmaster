@@ -142,18 +142,18 @@ final class ControlCenterModel {
     // MARK: Actions (close the popover first so it is not in the way)
 
     func lockScreen() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         background({ ControlCenterSystem.lockScreen(); return nil })
     }
 
     func screenshot() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         let url = URL(fileURLWithPath: "/System/Applications/Utilities/Screenshot.app")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { NSWorkspace.shared.open(url) }
     }
 
     func airDrop() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         let path = "/System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app"
         if FileManager.default.fileExists(atPath: path) {
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
@@ -166,7 +166,7 @@ final class ControlCenterModel {
         let name = ControlCenterSettings.shared.focusShortcut.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else {
             ControlCenterSystem.openSettings("com.apple.Focus-Settings.extension")
-            ControlCenterMenuBar.shared.close()
+            MainStatusItem.shared.close()
             return
         }
         background({ ControlCenterSystem.runShortcut(name) }) { [self] err in say(err) }
@@ -175,14 +175,14 @@ final class ControlCenterModel {
     func toggleCleaning() {
         let engine = KeyboardEngine.shared
         if engine.cleaningActive { engine.stopCleaning(); return }
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         if !engine.startCleaning(seconds: 0) {
             ControlCenterSystem.openSettings("com.apple.preference.security?Privacy_Accessibility")
         }
     }
 
     func toggleShelf() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         DispatchQueue.main.async { DropShelf.shared.toggle() }
     }
 
@@ -216,13 +216,13 @@ final class ControlCenterModel {
     }
 
     func openMacMaster() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         NSApp.activate(ignoringOtherApps: true)
         NotificationCenter.default.post(name: Notification.Name("MacMaster.openSection"), object: "dashboard")
     }
 
     func openSystemSettings() {
-        ControlCenterMenuBar.shared.close()
+        MainStatusItem.shared.close()
         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/System Settings.app"))
     }
 }

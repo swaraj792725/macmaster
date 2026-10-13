@@ -68,6 +68,7 @@ struct ToolsView: View {
             ToolsToastOverlay()
         }
         .animation(.smooth(duration: 0.28), value: selected)
+        .onSearchTab { selected = ToolsTool(rawValue: $0) }
     }
 
     private var grid: some View {

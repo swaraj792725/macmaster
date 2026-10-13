@@ -58,12 +58,12 @@ private struct StatsBatteryMenuBarOptions: View {
         let r = BatteryMonitor.shared.reading
         VStack(alignment: .leading, spacing: 10) {
             Text("Battery icon").font(.subheadline.weight(.semibold))
-            HStack(spacing: 10) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
                 ForEach(BatteryGlyphStyle.allCases) { s in
                     Button { glyph = s.rawValue } label: {
                         VStack(spacing: 6) {
                             BatteryGlyph(percent: r.isPresent ? r.percent : 0.72, isCharging: r.isCharging, isPluggedIn: r.isPluggedIn,
-                                         style: s, height: 14)
+                                         style: s, height: 14, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
                                 .frame(height: 20)
                             Text(s.title).font(.caption2).foregroundStyle(.secondary)
                         }

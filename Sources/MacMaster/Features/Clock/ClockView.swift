@@ -123,7 +123,11 @@ struct ClockView: View {
     // MARK: World clocks
 
     private var worldSection: some View {
-        GroupedSection("World clocks", symbol: "globe.europe.africa.fill", footer: "Shown in the World tab of the popover.") {
+        GroupedSection("World clocks", symbol: "globe.europe.africa.fill", footer: "Shown in the World tab of the popover, with a live day and night map.") {
+            toggleRow("Show world map", "map.fill", $settings.showWorldMap)
+            if settings.showWorldMap {
+                ClockWorldMapView(zones: settings.worldClocks).frame(maxWidth: .infinity)
+            }
             if settings.worldClocks.isEmpty {
                 Text("No world clocks yet.").font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
             }

@@ -17,30 +17,6 @@ struct DashboardView: View {
             storageCard
 
             VStack(alignment: .leading, spacing: 10) {
-                SectionTitle(text: "Live", symbol: "waveform.path.ecg")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: Theme.spacing)], spacing: Theme.spacing) {
-                    liveTile("CPU", Fmt.percent(monitor.cpu.total), "cpu.fill", Theme.Palette.blue,
-                             monitor.history.map(\.cpu), Theme.Palette.cpu,
-                             caption: "Load \(String(format: "%.2f", monitor.cpu.loadAverage.0))")
-                    liveTile("Memory", Fmt.percent(monitor.memory.usedFraction), "memorychip.fill", Theme.Palette.purple,
-                             monitor.history.map(\.memory), Theme.Palette.memory,
-                             caption: "\(Fmt.bytes(monitor.memory.used)) of \(Fmt.bytes(monitor.memory.total))")
-                    liveTile("GPU", Fmt.percent(monitor.gpu), "cube.transparent.fill", Theme.Palette.pink,
-                             monitor.history.map(\.gpu), Theme.Palette.gpu, caption: info.chip)
-                    liveTile("Network", "↓ " + Fmt.rate(monitor.network.downRate), "network", Theme.Palette.green,
-                             monitor.history.map(\.netDown), Theme.Palette.network, normalized: false,
-                             caption: "↑ " + Fmt.rate(monitor.network.upRate))
-                    liveTile("Disk", Fmt.bytes(monitor.disk.available) + " free", "internaldrive.fill", Theme.Palette.orange,
-                             monitor.history.map { $0.diskRead + $0.diskWrite }, Theme.Palette.disk, normalized: false,
-                             caption: "R \(Fmt.rate(monitor.disk.readRate)) · W \(Fmt.rate(monitor.disk.writeRate))")
-                    liveTile("Temperature", monitor.thermal.cpu.map(Fmt.temperature) ?? monitor.thermal.state.label,
-                             "thermometer.medium", Theme.Palette.red,
-                             monitor.history.compactMap(\.cpuTemp), Theme.Palette.thermal, range: 20...105,
-                             caption: "Thermal state: \(monitor.thermal.state.label)")
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
                 SectionTitle(text: "Quick Actions", symbol: "bolt.fill")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 250), spacing: Theme.spacing)], spacing: Theme.spacing) {
                     action("Optimize Mac", "Speed up memory, CPU & startup", "gauge.with.dots.needle.67percent", Theme.Palette.yellow) { open(.optimizer) }
@@ -50,6 +26,8 @@ struct DashboardView: View {
                     KeepAwakeAction()
                 }
             }
+
+            DashboardLauncher()
         }
     }
 
@@ -157,26 +135,7 @@ struct DashboardView: View {
         .card(padding: 18)
     }
 
-    // MARK: Tiles
-
-    private func liveTile(_ title: String, _ value: String, _ symbol: String, _ colors: [Color],
-                          _ series: [Double], _ color: Color, normalized: Bool = true,
-                          range: ClosedRange<Double>? = nil, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                IconTile(symbol: symbol, colors: colors, size: 24)
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                Spacer()
-            }
-            Text(value).font(.system(size: 24, weight: .semibold, design: .rounded)).monospacedDigit()
-                .contentTransition(.numericText()).lineLimit(1).minimumScaleFactor(0.7)
-            Sparkline(values: series.isEmpty ? [0, 0] : series, color: color,
-                      maxValue: range?.upperBound ?? (normalized ? 1 : nil), minValue: range?.lowerBound ?? 0)
-                .frame(height: 36)
-            Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        }
-        .card()
-    }
+    // MARK: Actions
 
     private func action(_ title: String, _ subtitle: String, _ symbol: String, _ colors: [Color], perform: @escaping () -> Void) -> some View {
         Button(action: perform) {
@@ -219,5 +178,114 @@ private struct KeepAwakeAction: View {
                                  trailing: AnyView(StatusPill(text: awake.isActive ? "On" : "Off", color: awake.isActive ? .green : .gray)))
         }
         .buttonStyle(.mmCard)
+    }
+}
+
+// MARK: - Launcher
+
+/// Grid of every feature, grouped like the sidebar, each with a one-line status read from existing state (no extra monitoring).
+private struct DashboardLauncher: View {
+    var body: some View {
+        // Cheap re-read of prefs every few seconds; nothing here polls the system.
+        TimelineView(.periodic(from: .now, by: 3)) { _ in
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(AppGroup.allCases.filter { $0 != .overview }) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        SectionTitle(text: group.title, symbol: group.symbol)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: Theme.spacing)], spacing: Theme.spacing) {
+                            ForEach(group.sections) { s in
+                                LauncherTile(section: s, status: LauncherStatus.text(for: s))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct LauncherTile: View {
+    let section: AppSection
+    let status: LauncherStatus
+
+    var body: some View {
+        Button {
+            NotificationCenter.default.post(name: .openSection, object: section.rawValue)
+        } label: {
+            HStack(spacing: 12) {
+                IconTile(symbol: section.symbol, colors: section.colors, size: 34)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(section.title).font(.system(size: 14, weight: .semibold))
+                    HStack(spacing: 5) {
+                        if let dot = status.dot {
+                            Circle().fill(dot).frame(width: 6, height: 6)
+                        }
+                        Text(status.text).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .card(padding: 12)
+        }
+        .buttonStyle(.mmCard)
+        .help(section.blurb)
+    }
+}
+
+private struct LauncherStatus {
+    let text: String
+    var dot: Color? = nil
+
+    private static func flag(_ key: String) -> Bool? {
+        UserDefaults.standard.object(forKey: key) as? Bool
+    }
+    private static func onOff(_ key: String, on: String = "On", off: String = "Off") -> LauncherStatus? {
+        guard let v = flag(key) else { return nil }
+        return LauncherStatus(text: v ? on : off, dot: v ? .green : nil)
+    }
+
+    /// Live status when it is readily available, otherwise the feature's own blurb.
+    @MainActor
+    static func text(for s: AppSection) -> LauncherStatus {
+        let fallback = LauncherStatus(text: s.blurb)
+        switch s {
+        case .stats:
+            let m = SystemMonitor.shared
+            return LauncherStatus(text: "CPU \(Fmt.percent(m.cpu.total)) · RAM \(Fmt.percent(m.memory.usedFraction))")
+        case .health:
+            let h = HealthMonitor.shared
+            return LauncherStatus(text: "Score \(h.score) · \(HealthScoring.label(h.score))",
+                                  dot: h.score >= 80 ? .green : h.score >= 60 ? .orange : .red)
+        case .battery:
+            let r = BatteryMonitor.shared.reading
+            guard r.isPresent else { return fallback }
+            return LauncherStatus(text: BatteryFormat.shortStatus(r), dot: r.isPluggedIn ? .green : nil)
+        case .tools:
+            return ToolsKeepAwake.shared.isActive ? LauncherStatus(text: "Keep Awake on", dot: .green) : fallback
+        case .keyboard:
+            let a = KeyboardEngine.shared.activeFeatures
+            return a.isEmpty ? fallback : LauncherStatus(text: a.prefix(2).joined(separator: ", ") + (a.count > 2 ? " +\(a.count - 2)" : ""), dot: .green)
+        case .tiling:
+            return onOff("mm.tiling.enabled") ?? fallback
+        case .mouse:
+            return onOff("mm.mouse.enabled") ?? fallback
+        case .shelf:
+            return onOff("mm.shelf.enabled") ?? fallback
+        case .menubar:
+            return onOff("mm.menubarmgr.enabled") ?? fallback
+        case .controlcenter:
+            return onOff("mm.controlcenter.show", on: "Icon shown", off: "Icon hidden") ?? fallback
+        case .clock:
+            return onOff("mm.clock.show", on: "Icon shown", off: "Icon hidden") ?? fallback
+        case .cleaner:
+            if flag("mm.cleaner.auto.enabled") == true { return LauncherStatus(text: "Auto-clean on", dot: .green) }
+            return fallback
+        case .optimizer:
+            if flag("mm.optimizer.auto") == true { return LauncherStatus(text: "Auto-optimize on", dot: .green) }
+            return fallback
+        default:
+            return fallback
+        }
     }
 }

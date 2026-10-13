@@ -52,6 +52,10 @@ struct UninstallerView: View {
             UninstallerRemovalSheet(model: model)
         }
         .onAppear { model.loadApps() }
+        .onSearchTab { raw in
+            if raw == "settings" { showSettings = true }
+            else if let t = UninstallerModel.Tab(rawValue: raw) { model.tab = t }
+        }
     }
 
     private var settings: some View {

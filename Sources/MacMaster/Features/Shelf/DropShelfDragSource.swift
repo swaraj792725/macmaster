@@ -8,11 +8,14 @@ struct DropShelfDragSource: NSViewRepresentable {
     var onBegan: () -> Void = {}
     var onEnded: ([DropShelfItem], Bool) -> Void
     var onOpen: (() -> Void)? = nil
+    /// Top-trailing region left to the SwiftUI controls drawn above this view (an AppKit subview would
+    /// otherwise win every hit test there and swallow their clicks).
+    var passthrough: CGSize = .zero
 
     func makeNSView(context: Context) -> DropShelfDragNSView { DropShelfDragNSView() }
 
     func updateNSView(_ v: DropShelfDragNSView, context: Context) {
-        v.items = items; v.onBegan = onBegan; v.onEnded = onEnded; v.onOpen = onOpen
+        v.items = items; v.onBegan = onBegan; v.onEnded = onEnded; v.onOpen = onOpen; v.passthrough = passthrough
     }
 }
 
@@ -21,6 +24,7 @@ final class DropShelfDragNSView: NSView, NSDraggingSource {
     var onBegan: () -> Void = {}
     var onEnded: ([DropShelfItem], Bool) -> Void = { _, _ in }
     var onOpen: (() -> Void)?
+    var passthrough: CGSize = .zero
 
     private var downPoint: NSPoint = .zero
     private var dragging = false
@@ -28,6 +32,13 @@ final class DropShelfDragNSView: NSView, NSDraggingSource {
 
     override var mouseDownCanMoveWindow: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let p = convert(point, from: superview)
+        if passthrough != .zero, p.x >= bounds.maxX - passthrough.width, p.y >= bounds.maxY - passthrough.height,
+           bounds.contains(p) { return nil }
+        return super.hitTest(point)
+    }
 
     override func mouseDown(with event: NSEvent) {
         downPoint = convert(event.locationInWindow, from: nil)

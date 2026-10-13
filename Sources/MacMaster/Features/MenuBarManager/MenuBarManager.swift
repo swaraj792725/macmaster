@@ -72,6 +72,7 @@ final class MenuBarManager {
     @ObservationIgnored let target = MenuBarManagerTarget()
     @ObservationIgnored let panel = MenuBarManagerPanelController()
     @ObservationIgnored let dropdown = MenuBarManagerDropdownController()
+    @ObservationIgnored let barDrag = MenuBarManagerBarDragWatcher()
     @ObservationIgnored var dropdownObservers: [NSObjectProtocol] = []
     @ObservationIgnored var lastDropdownScan: Date?
     @ObservationIgnored var dropdownMessageTask: Task<Void, Never>?
@@ -160,6 +161,7 @@ final class MenuBarManager {
         guard isRunning else { return }
         panel.hide()
         dropdown.hide()
+        barDrag.remove()
         dropdownMessageTask?.cancel(); dropdownMessageTask = nil
         for o in dropdownObservers { NSWorkspace.shared.notificationCenter.removeObserver(o) }
         dropdownObservers.removeAll()
@@ -490,7 +492,10 @@ final class MenuBarManager {
     /// Click / hot key behaviour: dropdown bar if collapsed and enabled, otherwise expand or collapse.
     func toggleFromUser(optionDown: Bool) {
         guard isRunning else { return }
-        if runningMode == .dropdown { toggleDropdown(); return }
+        if runningMode == .dropdown {
+            toggleDropdown(includeAlwaysHidden: optionDown && MenuBarManagerPrefs.optionClickAlwaysHidden && alwaysHiddenEnabled)
+            return
+        }
         if panel.isVisible { panel.hide(); return }
         if hidingUnsupported { showNotice(); return }
         let wantAll = optionDown && MenuBarManagerPrefs.optionClickAlwaysHidden

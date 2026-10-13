@@ -1,22 +1,18 @@
 import SwiftUI
 import AppKit
 
-/// Status item + transient popover for the Control Center replacement.
+/// Optional extra menu bar icon. It opens the same dropdown as MacMaster's main icon (there is no second popover).
+/// Off by default; also owns the Apple click-redirect lifecycle so it follows the settings.
 @MainActor
-final class ControlCenterMenuBar: NSObject, NSPopoverDelegate {
+final class ControlCenterMenuBar: NSObject {
     static let shared = ControlCenterMenuBar()
     private var item: NSStatusItem?
     private var shownSymbol: String?
-    private let popover = NSPopover()
     private let settings = ControlCenterSettings.shared
 
-    private override init() {
-        super.init()
-        popover.behavior = .transient
-        popover.delegate = self
-    }
+    private override init() { super.init() }
 
-    /// Creates, updates or removes the status item to match the settings. Idempotent.
+    /// Creates, updates or removes the extra status item to match the settings. Idempotent.
     func update() {
         AppleItemRedirect.shared.update()
         if settings.showInMenuBar {
@@ -27,13 +23,12 @@ final class ControlCenterMenuBar: NSObject, NSPopoverDelegate {
                 item = it
             }
             if shownSymbol != settings.icon.symbol {
-                let img = NSImage(systemSymbolName: settings.icon.symbol, accessibilityDescription: "Control Center")
+                let img = NSImage(systemSymbolName: settings.icon.symbol, accessibilityDescription: "MacMaster Control Center")
                 img?.isTemplate = true
                 it.button?.image = img
                 shownSymbol = settings.icon.symbol
             }
         } else if let it = item {
-            popover.performClose(nil)
             NSStatusBar.system.removeStatusItem(it)
             item = nil
             shownSymbol = nil
@@ -42,35 +37,8 @@ final class ControlCenterMenuBar: NSObject, NSPopoverDelegate {
 
     @objc private func toggle() {
         guard let button = item?.button else { return }
-        if popover.isShown { popover.performClose(nil); return }
-        present(from: button)
+        MainStatusItem.shared.toggle(from: button)
     }
 
-    var isPopoverShown: Bool { popover.isShown }
-
-    /// Opens the popover under any view (our status item, or the anchor over Apple's Control Center icon).
-    func present(from view: NSView) {
-        ControlCenterModel.shared.opened()
-        let host = NSHostingController(rootView: ControlCenterPopoverView())
-        host.sizingOptions = [.preferredContentSize]
-        popover.contentSize = NSSize(width: ControlCenterPopoverView.width, height: ControlCenterPopoverView.estimatedHeight())
-        popover.contentViewController = host
-        popover.showFromStatusItem(view)
-    }
-
-    /// Closes it if open. Returns true when it was.
-    @discardableResult
-    func closeIfShown() -> Bool {
-        guard popover.isShown else { return false }
-        popover.performClose(nil)
-        return true
-    }
-
-    func close() { if popover.isShown { popover.performClose(nil) } }
-
-    func popoverDidClose(_ notification: Notification) {
-        popover.contentViewController = nil
-        ControlCenterModel.shared.closed()
-        AppleItemRedirect.shared.anchorDone()
-    }
+    func close() { MainStatusItem.shared.close() }
 }

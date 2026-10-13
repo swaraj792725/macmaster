@@ -11,13 +11,9 @@ struct MenuBarManagerTileGlyph: View {
         // Reading the version makes the glyph redraw when new captures land.
         let _ = MenuBarManager.shared.captureVersion
         if let cap = tile.capture {
-            Image(nsImage: cap.image)
-                .renderingMode(cap.isMonochrome ? .template : .original)
-                .resizable().scaledToFit()
-                .foregroundStyle(.primary)
+            MenuBarManagerCaptureView(capture: cap)
                 .frame(height: 20)
                 .frame(maxWidth: maxCaptureWidth)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         } else if let icon = tile.appIcon {
             Image(nsImage: icon).resizable().scaledToFit().frame(width: 26, height: 26)
         } else {

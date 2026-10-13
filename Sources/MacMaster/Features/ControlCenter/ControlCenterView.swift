@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// Settings page for the Control Center replacement.
+/// Settings page for the Control Center: the MacMaster menu bar dropdown IS the Control Center.
 struct ControlCenterView: View {
     @State private var settings = ControlCenterSettings.shared
     @State private var redirect = AppleItemRedirect.shared
@@ -11,7 +11,7 @@ struct ControlCenterView: View {
     var body: some View {
         Page {
             PageHeader(title: "Control Center",
-                       subtitle: "A faster Control Center in your menu bar: tiles, brightness, sound and more.",
+                       subtitle: "The MacMaster dropdown is your Control Center: tiles, brightness, sound, stats and more in one place.",
                        symbol: "switch.2", colors: Theme.Palette.indigo)
             menuBarCard
             iconPicker
@@ -29,9 +29,9 @@ struct ControlCenterView: View {
                 .frame(width: 48, height: 48)
                 .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
-                Text("Show in menu bar").font(.headline)
-                Text(settings.showInMenuBar ? "Click the icon in your menu bar to open Control Center."
-                                            : "Off by default so you don't get a second icon until you want one.")
+                Text("Extra Control Center icon").font(.headline)
+                Text(settings.showInMenuBar ? "A second icon that opens the same dropdown."
+                                            : "Optional. The MacMaster icon (or Apple's Control Center icon, redirected below) already opens it.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
@@ -41,7 +41,7 @@ struct ControlCenterView: View {
     }
 
     private var iconPicker: some View {
-        GroupedSection("Menu bar icon", symbol: "star.square", footer: "Pick whichever glyph fits your menu bar. It follows light and dark automatically.") {
+        GroupedSection("Extra icon glyph", symbol: "star.square", footer: "Glyph for the optional extra icon. It follows light and dark automatically.") {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(ControlCenterIcon.allCases) { icon in
                     let selected = settings.icon == icon
@@ -71,7 +71,7 @@ struct ControlCenterView: View {
     private var tilesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             GroupedSection("Layout", symbol: "square.grid.2x2",
-                           footer: "Open the popover and press the edit button to drag tiles around, or set the order, size and visibility here.") {
+                           footer: "Open the dropdown and press the edit button to drag tiles around, or set the order, size and visibility here.") {
                 SettingsRow(title: "Preset", subtitle: "Start from a ready-made layout.", symbol: "rectangle.3.group", colors: Theme.Palette.indigo) {
                     Menu {
                         ForEach(ControlCenterPreset.allCases) { p in
@@ -119,8 +119,8 @@ struct ControlCenterView: View {
 
     private var replaceSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionTitle(text: "Replace Apple's Control Center", symbol: "switch.2")
-            Text("macOS doesn't let apps remove Apple's menu bar icons. These options work around that: redirect the click to MacMaster, or try (and verify) hiding the icon.")
+            SectionTitle(text: "Replace Apple's icons", symbol: "switch.2")
+            Text("macOS doesn't let apps remove Apple's menu bar icons. Redirect makes a click on Apple's icon open MacMaster's dropdown instead (Apple's icon stays, but does nothing). Or try hiding the icon.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if settings.redirectControlCenter || settings.redirectClock {
                 PermissionBanner(permission: .accessibility,
@@ -138,24 +138,84 @@ struct ControlCenterView: View {
 
     private var redirectSection: some View {
         GroupedSection("Redirect clicks", symbol: "cursorarrow.click.2",
-                       footer: "Hold Shift, Option, Command or Control while clicking to reach Apple's original. Apple's icon stays in the menu bar; the click just opens MacMaster's popover under it. Nothing runs while you aren't clicking the menu bar.") {
-            SettingsRow(title: "Open MacMaster's Control Center", subtitle: redirectSubtitle(redirect.foundControlCenter),
+                       footer: "Hold Shift, Option, Command or Control while clicking to reach Apple's original. Apple's icon stays in the menu bar; the click opens MacMaster instead. To see what it does: log stream --predicate 'subsystem == \"com.macmaster.app\" AND category == \"redirect\"'") {
+            SettingsRow(title: "Status", subtitle: statusDetail, symbol: statusSymbol, colors: statusColors) {
+                HStack(spacing: 8) {
+                    Text(statusLabel).font(.callout.weight(.semibold)).foregroundStyle(statusColor)
+                    Button("Test") { redirect.test() }
+                        .buttonStyle(.mmSecondary)
+                        .disabled(redirect.status == .off || redirect.status == .needsAccessibility || redirect.status == .failed)
+                        .help("Open the dropdown under Apple's Control Center icon")
+                    Button { redirect.update(); redirect.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.mmGhost).help("Check again")
+                }
+            }
+            SettingsRow(title: "Apple's Control Center icon opens MacMaster",
+                        subtitle: foundLine(redirect.foundControlCenter, enabled: settings.redirectControlCenter),
                         symbol: "switch.2", colors: Theme.Palette.indigo) {
                 Toggle("", isOn: $settings.redirectControlCenter).toggleStyle(.switch).labelsHidden()
             }
-            SettingsRow(title: "Open MacMaster's Clock", subtitle: redirectSubtitle(redirect.foundClock),
+            SettingsRow(title: "Apple's clock opens MacMaster's Clock",
+                        subtitle: foundLine(redirect.foundClock, enabled: settings.redirectClock),
                         symbol: "clock.fill", colors: Theme.Palette.orange) {
                 Toggle("", isOn: $settings.redirectClock).toggleStyle(.switch).labelsHidden()
             }
         }
     }
 
-    private func redirectSubtitle(_ found: Bool) -> String {
+    private var statusLabel: String {
         switch redirect.status {
-        case .off: "Clicking Apple's icon opens Apple's popover."
-        case .needsAccessibility: "Waiting for Accessibility access."
-        case .failed: "Couldn't start the click listener. Check Accessibility and Input Monitoring access."
-        case .active: found ? "Active. Apple's icon found in the menu bar." : "Active, but Apple's icon wasn't found yet (checking when the menu bar changes)."
+        case .off: "Off"
+        case .needsAccessibility: "Needs Accessibility"
+        case .failed: "Can't listen"
+        case .notFound: "Apple icon not found"
+        case .active: "Active"
+        }
+    }
+
+    private var statusDetail: String {
+        switch redirect.status {
+        case .off: "Turn a switch below on to redirect Apple's icon."
+        case .needsAccessibility: "Grant Accessibility above so MacMaster can find Apple's icons and catch the click."
+        case .failed: "Couldn't start the click listener. Check Accessibility (and Input Monitoring) access, then press check again."
+        case .notFound: "Listening, but Apple's icon wasn't located in the menu bar. Test still opens the dropdown at the top of the screen."
+        case .active: "Listening. Click Apple's icon, or press Test."
+        }
+    }
+
+    private var statusColor: Color {
+        switch redirect.status {
+        case .active: .green
+        case .off: .secondary
+        case .needsAccessibility, .notFound: .orange
+        case .failed: .red
+        }
+    }
+
+    private var statusColors: [Color] {
+        switch redirect.status {
+        case .active: Theme.Palette.green
+        case .off: Theme.Palette.gray
+        case .needsAccessibility, .notFound: Theme.Palette.orange
+        case .failed: Theme.Palette.red
+        }
+    }
+
+    private var statusSymbol: String {
+        switch redirect.status {
+        case .active: "checkmark.circle.fill"
+        case .off: "pause.circle.fill"
+        case .needsAccessibility, .notFound, .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func foundLine(_ found: Bool, enabled: Bool) -> String {
+        guard enabled else { return "Off. Clicking Apple's icon opens Apple's popover." }
+        switch redirect.status {
+        case .needsAccessibility: return "Waiting for Accessibility access."
+        case .failed: return "Click listener not running."
+        case .off: return "Off."
+        default: return found ? "Apple's icon found in the menu bar." : "Apple's icon not found yet (rechecks every few seconds)."
         }
     }
 

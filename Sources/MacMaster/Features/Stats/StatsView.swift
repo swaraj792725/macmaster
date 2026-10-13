@@ -7,7 +7,10 @@ struct StatsView: View {
     private let columns = [GridItem(.adaptive(minimum: 300), spacing: Theme.spacing, alignment: .top)]
 
     var body: some View {
-        Page {
+        Page(jump: [PageJump("stats.cpu", "CPU"), PageJump("stats.memory", "Memory"), PageJump("stats.gpu", "GPU"),
+                    PageJump("stats.disk", "Disk"), PageJump("stats.network", "Network"), PageJump("stats.sensors", "Sensors"),
+                    PageJump("stats.power", "Power"), PageJump("stats.processes", "Processes"),
+                    PageJump("stats.menubar", "Menu bar")]) {
             PageHeader(title: "Stats", subtitle: "\(SystemInfo.current.chip) · \(SystemInfo.current.osVersion) · up \(StatsFmt.uptime(SystemInfo.uptime))",
                        symbol: "chart.bar.xaxis", colors: Theme.Palette.stats) {
                 HStack(spacing: 8) {
@@ -27,17 +30,17 @@ struct StatsView: View {
             }
 
             LazyVGrid(columns: columns, spacing: Theme.spacing) {
-                StatsCPUCard()
-                StatsMemoryCard()
-                StatsGPUCard()
-                StatsDiskCard()
-                StatsNetworkCard()
-                StatsSensorsCard()
-                StatsPowerCard()
+                StatsCPUCard().searchAnchor("stats.cpu")
+                StatsMemoryCard().searchAnchor("stats.memory")
+                StatsGPUCard().searchAnchor("stats.gpu")
+                StatsDiskCard().searchAnchor("stats.disk")
+                StatsNetworkCard().searchAnchor("stats.network")
+                StatsSensorsCard().searchAnchor("stats.sensors")
+                StatsPowerCard().searchAnchor("stats.power")
             }
 
-            StatsProcessExplorer()
-            StatsMenuBarSettingsCard()
+            StatsProcessExplorer().searchAnchor("stats.processes")
+            StatsMenuBarSettingsCard().searchAnchor("stats.menubar")
         }
         .onAppear {
             StatsSettings.applyStoredInterval()

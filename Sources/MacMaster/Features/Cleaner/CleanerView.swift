@@ -19,8 +19,9 @@ struct CleanerView: View {
             CleanerDiskHeader()
             switch tab {
             case .scan: CleanerScanPane()
-            case .auto: CleanerAutoView()
+            case .auto: CleanerAutoView().searchAnchor("cleaner.auto")
             }
         }
+        .searchTab($tab)
     }
 }

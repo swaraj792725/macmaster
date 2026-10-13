@@ -48,6 +48,7 @@ enum ControlCenterTileSize: String, CaseIterable, Identifiable {
 enum ControlCenterTile: String, CaseIterable, Identifiable {
     case wifi, bluetooth, darkMode, keepAwake, focus, nightShift, lowPower, lockScreen, screenshot, airDrop, cleaning, shelf
     case micMute, brightness, volume, keyboardBrightness, nowPlaying, audioDevices, bluetoothDevices
+    case hideDesktop, hiddenFiles, smoothScroll, windowSwitcher
 
     var id: String { rawValue }
 
@@ -82,6 +83,10 @@ enum ControlCenterTile: String, CaseIterable, Identifiable {
         case .nowPlaying: "Now Playing"
         case .audioDevices: "Audio Devices"
         case .bluetoothDevices: "Bluetooth Devices"
+        case .hideDesktop: "Hide Desktop"
+        case .hiddenFiles: "Hidden Files"
+        case .smoothScroll: "Smooth Scroll"
+        case .windowSwitcher: "Window Switcher"
         }
     }
 
@@ -106,6 +111,10 @@ enum ControlCenterTile: String, CaseIterable, Identifiable {
         case .nowPlaying: SymbolKit.firstAvailable(["play.circle.fill", "music.note"])
         case .audioDevices: SymbolKit.firstAvailable(["hifispeaker.fill", "speaker.wave.2.fill"])
         case .bluetoothDevices: SymbolKit.firstAvailable(["headphones", "dot.radiowaves.left.and.right"])
+        case .hideDesktop: SymbolKit.firstAvailable(["menubar.dock.rectangle", "macwindow"])
+        case .hiddenFiles: SymbolKit.firstAvailable(["eye.fill", "eye"])
+        case .smoothScroll: SymbolKit.firstAvailable(["computermouse.fill", "cursorarrow"])
+        case .windowSwitcher: SymbolKit.firstAvailable(["macwindow.on.rectangle", "macwindow"])
         }
     }
 
@@ -121,6 +130,10 @@ enum ControlCenterTile: String, CaseIterable, Identifiable {
         case .screenshot, .bluetoothDevices: Theme.Palette.teal
         case .cleaning, .nowPlaying: Theme.Palette.pink
         case .shelf: Theme.Palette.mint
+        case .hideDesktop: Theme.Palette.teal
+        case .hiddenFiles: Theme.Palette.pink
+        case .smoothScroll: Theme.Palette.blue
+        case .windowSwitcher: Theme.Palette.purple
         case .micMute: Theme.Palette.red
         }
     }
@@ -156,6 +169,7 @@ enum ControlCenterTile: String, CaseIterable, Identifiable {
         (.darkMode, .small), (.focus, .small), (.nightShift, .small), (.keepAwake, .small),
         (.lowPower, .small), (.micMute, .small), (.lockScreen, .small), (.screenshot, .small),
         (.airDrop, .wide), (.cleaning, .small), (.shelf, .small),
+        (.hideDesktop, .small), (.hiddenFiles, .small), (.smoothScroll, .small), (.windowSwitcher, .small),
         (.brightness, .banner), (.keyboardBrightness, .banner), (.volume, .banner),
         (.audioDevices, .banner), (.nowPlaying, .banner), (.bluetoothDevices, .banner),
     ]
@@ -182,6 +196,10 @@ enum ControlCenterTile: String, CaseIterable, Identifiable {
         case .nowPlaying: "Title, artwork and transport controls. Hidden when macOS gives no playback info."
         case .audioDevices: "Switch the default output and input device."
         case .bluetoothDevices: "Connected Bluetooth devices with battery levels."
+        case .hideDesktop: "Hide or show the icons on your desktop."
+        case .hiddenFiles: "Show or hide hidden files in Finder."
+        case .smoothScroll: "Smooth mouse-wheel scrolling (turns the Mouse feature on)."
+        case .windowSwitcher: "Window previews when you switch apps."
         }
     }
 }
@@ -228,6 +246,7 @@ enum ControlCenterPreset: String, CaseIterable, Identifiable {
         case .work:
             [(.keepAwake, .large), (.focus, .wide), (.darkMode, .small), (.nightShift, .small),
              (.micMute, .small), (.lockScreen, .small), (.screenshot, .small), (.cleaning, .small),
+             (.windowSwitcher, .small), (.hideDesktop, .small),
              (.brightness, .banner), (.volume, .banner)]
         }
     }

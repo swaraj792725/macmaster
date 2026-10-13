@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// The shelf UI: header, file tiles, drop target and stack actions.
 struct DropShelfContentView: View {
@@ -22,7 +21,7 @@ struct DropShelfContentView: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(targeted ? Color.accentColor : Color.primary.opacity(0.12), lineWidth: targeted ? 2 : 0.5)
         )
-        .onDrop(of: [.fileURL], isTargeted: $targeted) { providers in handleDrop(providers) }
+        .onDrop(of: DropShelf.dropTypes, isTargeted: $targeted) { providers in DropShelf.shared.addFromProviders(providers) }
         .animation(.smooth(duration: 0.2), value: model.items.count)
     }
 
@@ -139,29 +138,6 @@ struct DropShelfContentView: View {
 
     // MARK: Drop / drag-out
 
-    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
-        guard !model.internalDragActive else { return false }
-        let wanted = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
-        guard !wanted.isEmpty else { return false }
-        model.pendingLoads += wanted.count
-        for p in wanted {
-            p.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                var url: URL?
-                if let data = item as? Data { url = URL(dataRepresentation: data, relativeTo: nil) }
-                else if let u = item as? URL { url = u }
-                else if let u = item as? NSURL { url = u as URL }
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        model.pendingLoads -= 1
-                        if let url { model.add([url]) }
-                        DropShelf.shared.noteShelfDrop()
-                    }
-                }
-            }
-        }
-        return true
-    }
-
     private func finishDrag(_ items: [DropShelfItem], _ accepted: Bool) {
         model.internalDragActive = false
         DropShelf.shared.resyncDragMonitor()
@@ -198,15 +174,17 @@ private struct DropShelfTile: View {
                                     DropShelf.shared.resyncDragMonitor()
                                     if ok { model.remove(done.map(\.url)) }
                                 },
-                                onOpen: { NSWorkspace.shared.open(item.url) })
+                                onOpen: { NSWorkspace.shared.open(item.url) },
+                                passthrough: CGSize(width: 30, height: 30))
 
             Button { model.remove(id: item.id) } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 15)).symbolRenderingMode(.palette)
                     .foregroundStyle(.white, Color.black.opacity(0.55))
+                    .frame(width: 22, height: 22).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .padding(4)
+            .padding(2)
             .opacity(hover ? 1 : 0.35)
             .help("Remove from shelf")
         }

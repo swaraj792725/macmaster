@@ -33,6 +33,7 @@ struct PermissionsView: View {
                 ForEach(Permission.allCases) { p in
                     PermissionsRow(permission: p, granted: model.isGranted(p)) { model.request(p) }
                         .card()
+                        .searchAnchor("perm.\(p.rawValue)")
                 }
             }
 

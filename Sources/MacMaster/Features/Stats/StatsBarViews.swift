@@ -14,11 +14,12 @@ struct StatsBarModel {
     var battery: BatteryReading = .none
     var glyph: BatteryGlyphStyle = .classic
     var showTime = false
+    var lowPower = false
 
     var signature: String {
         let h = history.map { String(Int(($0 * 30).rounded())) }.joined(separator: ",")
         let b = module == .battery
-            ? "\(Int(battery.percent * 100))|\(battery.isCharging)|\(battery.isPluggedIn)|\(glyph.rawValue)|\(showTime)|\(battery.timeToEmpty ?? -1)|\(battery.timeToFull ?? -1)"
+            ? "\(Int(battery.percent * 100))|\(battery.isCharging)|\(battery.isPluggedIn)|\(glyph.rawValue)|\(lowPower)|\(showTime)|\(battery.timeToEmpty ?? -1)|\(battery.timeToFull ?? -1)"
             : ""
         return [module.rawValue, style.rawValue, label, value, h, line1, line2, b].joined(separator: "/")
     }
@@ -55,6 +56,7 @@ struct StatsBarModel {
             model.battery = BatteryMonitor.shared.reading
             model.glyph = StatsSettings.batteryGlyph()
             model.showTime = StatsSettings.batteryShowTime()
+            model.lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
         return model
     }
@@ -143,7 +145,7 @@ struct StatsBarItemView: View {
             // Small icon + stacked "BAT / 55%", same layout as the CPU/MEM items.
             return AnyView(HStack(spacing: 3) {
                 BatteryGlyph(percent: r.percent, isCharging: r.isCharging, isPluggedIn: r.isPluggedIn,
-                             style: model.glyph == .number ? .classic : model.glyph, height: model.glyph == .ring ? 12 : 9)
+                             style: model.glyph.compactStyle, height: model.glyph.menuBarHeight(compact: true), lowPower: model.lowPower)
                 VStack(alignment: .leading, spacing: -1) {
                     Text(model.showTime ? (minutes.map(BatteryFormat.minutes) ?? "BAT") : "BAT")
                         .font(.system(size: 7.5, weight: .bold)).opacity(0.55)
@@ -156,9 +158,9 @@ struct StatsBarItemView: View {
         return AnyView(HStack(spacing: 4) {
             if model.style != .text {
                 BatteryGlyph(percent: r.percent, isCharging: r.isCharging, isPluggedIn: r.isPluggedIn,
-                             style: model.glyph, height: model.glyph == .ring ? 14 : 11)
+                             style: model.glyph, height: model.glyph.menuBarHeight(compact: false), lowPower: model.lowPower)
             }
-            if model.style == .text || (model.style == .both && model.glyph != .number) {
+            if model.style == .text || (model.style == .both && !model.glyph.includesPercent) {
                 Text("\(Int((r.percent * 100).rounded()))%")
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded)).monospacedDigit()
             }

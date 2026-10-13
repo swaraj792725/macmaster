@@ -43,6 +43,7 @@ struct OptimizerView: View {
             .transition(.opacity)
         }
         .animation(.smooth(duration: 0.25), value: tab)
+        .searchTab($tab)
         .animation(.smooth(duration: 0.35), value: flow.stage)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if tab == .optimize && flow.stage == .review && !engine.recommendations.isEmpty { actionBar }

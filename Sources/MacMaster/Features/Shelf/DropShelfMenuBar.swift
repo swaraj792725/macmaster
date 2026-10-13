@@ -10,10 +10,22 @@ final class DropShelfMenuBar: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private var drawnCount = -1
     private var targeted = false
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    /// A mouse-down outside our windows is pending; it only closes the popover if it ends without a drag.
+    private var outsidePressed = false
+    private var outsideDragged = false
+    /// Drag-pasteboard change count at the outside mouse-down: a new drag (another app's file or screenshot
+    /// thumbnail) bumps it even if no dragged events reach us, so the press still counts as a drag.
+    private var pressDragCount = 0
+    private let dragPasteboard = NSPasteboard(name: .drag)
+
+    var isOpen: Bool { popover.isShown }
 
     private override init() {
         super.init()
-        popover.behavior = .transient
+        // .transient would close the moment the user clicks in Finder to start a drag; closing is handled below.
+        popover.behavior = .applicationDefined
         popover.delegate = self
     }
 
@@ -29,10 +41,18 @@ final class DropShelfMenuBar: NSObject, NSPopoverDelegate {
                     b.sendAction(on: [.leftMouseUp, .rightMouseUp])
                     b.setAccessibilityLabel("MacMaster Drop Shelf")
                     let drop = DropShelfStatusDropView(frame: b.bounds)
-                    drop.autoresizingMask = [.width, .height]
                     drop.onTargeted = { [weak self] in self?.setTargeted($0) }
                     drop.onDrop = { pb in DropShelf.shared.addFromPasteboard(pb) }
+                    drop.onClick = { [weak self] right in self?.handleClick(right: right) }
                     b.addSubview(drop)
+                    // The button has no size yet; pin the overlay to its edges so it always covers it.
+                    drop.translatesAutoresizingMaskIntoConstraints = false
+                    NSLayoutConstraint.activate([
+                        drop.leadingAnchor.constraint(equalTo: b.leadingAnchor),
+                        drop.trailingAnchor.constraint(equalTo: b.trailingAnchor),
+                        drop.topAnchor.constraint(equalTo: b.topAnchor),
+                        drop.bottomAnchor.constraint(equalTo: b.bottomAnchor),
+                    ])
                 }
                 item = it
             }
@@ -79,27 +99,33 @@ final class DropShelfMenuBar: NSObject, NSPopoverDelegate {
 
     // MARK: Click handling
 
+    /// Fallback for the button's own action (accessibility press); real clicks arrive via the overlay.
     @objc private func clicked() {
+        handleClick(right: NSApp.currentEvent?.type == .rightMouseUp)
+    }
+
+    private func handleClick(right: Bool) {
         guard let button = item?.button else { return }
-        if NSApp.currentEvent?.type == .rightMouseUp {
-            popover.performClose(nil)
-            showMenu()
+        if right {
+            close()
+            showMenu(from: button)
             return
         }
-        if popover.isShown { popover.performClose(nil); return }
+        if popover.isShown { close(); return }
         let host = NSHostingController(rootView: DropShelfPopoverView(model: DropShelf.shared.model, onClose: { [weak self] in self?.close() }))
         host.sizingOptions = [.preferredContentSize]
         popover.contentViewController = host
         DropShelf.shared.model.pruneMissing()
         popover.showFromStatusItem(button)
+        installMonitors()
     }
 
     func close() { if popover.isShown { popover.performClose(nil) } }
 
-    private func showMenu() {
-        guard let it = item else { return }
+    private func showMenu(from button: NSView) {
         let count = DropShelf.shared.model.items.count
         let menu = NSMenu()
+        menu.autoenablesItems = false
         let head = NSMenuItem(title: count == 0 ? "Shelf is empty" : "\(count) item\(count == 1 ? "" : "s") on the shelf", action: nil, keyEquivalent: "")
         head.isEnabled = false
         menu.addItem(head)
@@ -111,9 +137,7 @@ final class DropShelfMenuBar: NSObject, NSPopoverDelegate {
         menu.addItem(clear)
         menu.addItem(.separator())
         menu.addItem(menuItem("Hide Menu Bar Icon", #selector(hideIcon)))
-        it.menu = menu
-        it.button?.performClick(nil)
-        it.menu = nil
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
     }
 
     private func menuItem(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -128,31 +152,99 @@ final class DropShelfMenuBar: NSObject, NSPopoverDelegate {
     @objc private func hideIcon() { DropShelfSettings.shared.showInMenuBar = false }
 
     func popoverDidClose(_ notification: Notification) {
+        removeMonitors()
         popover.contentViewController = nil
+    }
+
+    // MARK: Closing rules
+
+    /// Closes on Esc, on a click in another window of ours, or on a plain click elsewhere. A press that turns
+    /// into a drag (the user grabbing a file in Finder) leaves the popover open so it can be dropped onto.
+    /// Monitors exist only while the popover is shown.
+    private func installMonitors() {
+        removeMonitors()
+        outsidePressed = false; outsideDragged = false
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            let type = event.type
+            MainActor.assumeIsolated { self?.outsideEvent(type) }
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
+            guard let self else { return event }
+            let type = event.type, code = event.keyCode, window = event.window
+            let swallow = MainActor.assumeIsolated { self.localEvent(type, code, window) }
+            return swallow ? nil : event
+        }
+    }
+
+    private func removeMonitors() {
+        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
+        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        globalMonitor = nil; localMonitor = nil
+        outsidePressed = false; outsideDragged = false
+    }
+
+    private func outsideEvent(_ type: NSEvent.EventType) {
+        switch type {
+        case .leftMouseDown: outsidePressed = true; outsideDragged = false; pressDragCount = dragPasteboard.changeCount
+        case .leftMouseDragged: if outsidePressed { outsideDragged = true }
+        case .leftMouseUp:
+            if outsidePressed && !outsideDragged && dragPasteboard.changeCount == pressDragCount { close() }
+            outsidePressed = false
+        default: close()
+        }
+    }
+
+    /// True if the event is consumed.
+    private func localEvent(_ type: NSEvent.EventType, _ keyCode: UInt16, _ window: NSWindow?) -> Bool {
+        if type == .keyDown {
+            guard keyCode == 53, popover.isShown else { return false }
+            close()
+            return true
+        }
+        if window == nil || window === popover.contentViewController?.view.window || window === item?.button?.window { return false }
+        close()
+        return false
     }
 }
 
-/// Transparent overlay on the status button that receives drops. Mouse events are handed to the button
-/// so clicks and right-clicks behave exactly as before.
+/// Transparent overlay covering the status button. It takes the drops and also handles the clicks itself
+/// (left toggles the popover, right or control-click opens the menu), so nothing depends on how the
+/// button would forward events.
 final class DropShelfStatusDropView: NSView {
     var onDrop: (NSPasteboard) -> Bool = { _ in false }
     var onTargeted: (Bool) -> Void = { _ in }
+    var onClick: (_ right: Bool) -> Void = { _ in }
+
+    /// Includes file promises (the floating screenshot thumbnail, Photos, Mail).
+    private static let dragTypes: [NSPasteboard.PasteboardType] =
+        [.fileURL, .URL, .png, .tiff, .string] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        registerForDraggedTypes([.fileURL, .png, .tiff, .string])
+        registerForDraggedTypes(Self.dragTypes)
     }
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override func isAccessibilityElement() -> Bool { false }
-    override func mouseDown(with event: NSEvent) { superview?.mouseDown(with: event) }
-    override func mouseUp(with event: NSEvent) { superview?.mouseUp(with: event) }
-    override func rightMouseDown(with event: NSEvent) { superview?.rightMouseDown(with: event) }
-    override func rightMouseUp(with event: NSEvent) { superview?.rightMouseUp(with: event) }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    private var button: NSStatusBarButton? { superview as? NSStatusBarButton }
+
+    override func mouseDown(with event: NSEvent) { button?.isHighlighted = true }
+    override func rightMouseDown(with event: NSEvent) { button?.isHighlighted = true }
+
+    override func mouseUp(with event: NSEvent) { finish(event, right: event.modifierFlags.contains(.control)) }
+    override func rightMouseUp(with event: NSEvent) { finish(event, right: true) }
+
+    private func finish(_ event: NSEvent, right: Bool) {
+        button?.isHighlighted = false
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        MainActor.assumeIsolated { onClick(right) }
+    }
 
     private func accepts(_ pb: NSPasteboard) -> Bool {
         let types = Set(pb.types ?? [])
-        return !types.isDisjoint(with: [.fileURL, .png, .tiff, .string])
+        return !types.isDisjoint(with: Self.dragTypes)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

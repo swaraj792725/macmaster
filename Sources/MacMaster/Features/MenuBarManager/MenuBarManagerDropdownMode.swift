@@ -19,6 +19,7 @@ extension MenuBarManager {
         applyPrefsIfChanged(force: true)
         observeSystem()
         observeWorkspaceForDropdown()
+        barDrag.install(for: self)
         updateToggleGlyph()
         // Warm the inventory once, off the critical path, so the first open already has data.
         Task { [weak self] in
@@ -68,12 +69,13 @@ extension MenuBarManager {
 
     // MARK: Open / close
 
-    func toggleDropdown() {
+    func toggleDropdown(includeAlwaysHidden: Bool = false) {
         guard isRunning, runningMode == .dropdown else { return }
-        if dropdown.isVisible { dropdown.hide() } else { openDropdown() }
+        if dropdown.isVisible { dropdown.hide() } else { openDropdown(includeAlwaysHidden: includeAlwaysHidden) }
     }
 
-    func openDropdown() {
+    /// `forDrag`: opened for a ⌘-drag from the bar. No focus grab, no rescan (the list must hold still under the pointer).
+    func openDropdown(includeAlwaysHidden: Bool = false, forDrag: Bool = false) {
         guard isRunning, runningMode == .dropdown else { return }
         let win = toggleItem?.button?.window
         let anchorOK: Bool = {
@@ -88,8 +90,9 @@ extension MenuBarManager {
         else { anchor = CGRect(x: screen.frame.maxX - 40, y: screen.frame.maxY - 24, width: 24, height: 24) }
         dropdown.ignoredWindow = win
         dropdown.onSettings = { MenuBarManager.openSettingsHandler?() }
-        dropdown.show(anchor: anchor, on: screen)
+        dropdown.show(anchor: anchor, on: screen, includeAlwaysHidden: includeAlwaysHidden, focus: !forDrag)
         dropdownMessage = nil
+        guard !forDrag else { return }
         Task { [weak self] in
             await self?.refreshDropdownInventory()
         }

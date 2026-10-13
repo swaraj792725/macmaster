@@ -28,7 +28,9 @@ struct TilingView: View {
     @State private var newName = ""
 
     var body: some View {
-        Page {
+        Page(jump: enabled ? [PageJump("tiling.snap", "Drag to Snap"), PageJump("tiling.layouts", "Snap Layouts"),
+                              PageJump("tiling.keys", "Shortcuts"), PageJump("tiling.modifier", "Modifier Drag"),
+                              PageJump("tiling.extras", "Extras"), PageJump("tiling.saved", "Saved Layouts")] : []) {
             PageHeader(title: "Window Tiling",
                        subtitle: "Snap, tile and move windows with the mouse or the keyboard",
                        symbol: "rectangle.split.2x2.fill", colors: Theme.Palette.windows) {
@@ -44,12 +46,12 @@ struct TilingView: View {
             if enabled {
                 if nativeOn && snapEnabled { nativeNotice }
                 hero
-                dragToSnap
-                snapLayoutsGroup
-                keyboardGroup
-                modifierGroup
-                extrasGroup
-                savedLayoutsGroup
+                dragToSnap.searchAnchor("tiling.snap")
+                snapLayoutsGroup.searchAnchor("tiling.layouts")
+                keyboardGroup.searchAnchor("tiling.keys")
+                modifierGroup.searchAnchor("tiling.modifier")
+                extrasGroup.searchAnchor("tiling.extras")
+                savedLayoutsGroup.searchAnchor("tiling.saved")
             } else {
                 EmptyStateView(symbol: "rectangle.split.2x2", title: "Window Tiling is off",
                                message: "Turn it on to snap windows to screen edges, use layout shortcuts and more.")

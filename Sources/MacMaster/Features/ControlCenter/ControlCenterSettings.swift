@@ -69,6 +69,13 @@ final class ControlCenterSettings {
     /// Tiles that start hidden when they are new to a layout. Everything else starts visible.
     private static let hiddenByDefault: Set<ControlCenterTile> = [.audioDevices, .bluetoothDevices]
 
+    /// Old `mm.menubar.tile.*` switches whose tiles now live in the Control Center grid.
+    private static let legacyMenuBarKeys: [ControlCenterTile: String] = [
+        .hideDesktop: "mm.menubar.tile.hideDesktop", .hiddenFiles: "mm.menubar.tile.hiddenFiles",
+        .smoothScroll: "mm.menubar.tile.smoothScroll", .windowSwitcher: "mm.menubar.tile.windowSwitcher",
+    ]
+
+    /// Opt-in extra menu bar icon that opens the same dropdown as MacMaster's main icon.
     var showInMenuBar: Bool {
         didSet {
             UserDefaults.standard.set(showInMenuBar, forKey: Keys.show)
@@ -115,8 +122,9 @@ final class ControlCenterSettings {
         showInMenuBar = d.bool(forKey: Keys.show)   // off until the user opts in
         icon = ControlCenterIcon(rawValue: d.string(forKey: Keys.icon) ?? "") ?? .switches
         focusShortcut = d.string(forKey: Keys.shortcut) ?? ""
-        redirectControlCenter = d.bool(forKey: Keys.redirectCC)
-        redirectClock = d.bool(forKey: Keys.redirectClock)
+        // On unless the user switched them off: the dropdown is meant to replace Apple's Control Center.
+        redirectControlCenter = d.object(forKey: Keys.redirectCC) as? Bool ?? true
+        redirectClock = d.object(forKey: Keys.redirectClock) as? Bool ?? true
         sizes = d.dictionary(forKey: Keys.sizes) as? [String: String] ?? [:]
 
         var hidden = Set(d.stringArray(forKey: Keys.hidden) ?? [])
@@ -130,6 +138,8 @@ final class ControlCenterSettings {
         for (tile, _) in ControlCenterTile.defaultLayout where !saved.contains(tile) {
             saved.append(tile)
             if Self.hiddenByDefault.contains(tile) { hidden.insert(tile.rawValue) }
+            // Toggles that used to live in the old dropdown keep the visibility the user gave them there.
+            if let legacy = Self.legacyMenuBarKeys[tile], d.object(forKey: legacy) as? Bool == false { hidden.insert(tile.rawValue) }
         }
         hiddenTiles = hidden
         order = saved

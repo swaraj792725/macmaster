@@ -42,12 +42,8 @@ struct MenuBarManagerIconCell: View {
         Button(action: action) {
             Group {
                 if let cap = capture.image(for: item) {
-                    Image(nsImage: cap.image)
-                        .renderingMode(cap.isMonochrome ? .template : .original)
-                        .resizable().scaledToFit()
-                        .foregroundStyle(.primary)
+                    MenuBarManagerCaptureView(capture: cap)
                         .frame(width: max(14, item.frame.width), height: min(22, max(12, item.frame.height - 2)))
-                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 } else {
                     HStack(spacing: 6) {
                         Image(nsImage: item.icon ?? NSImage())

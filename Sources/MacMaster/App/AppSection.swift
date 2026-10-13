@@ -1,7 +1,14 @@
 import SwiftUI
 
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
-    case dashboard, optimizer, uninstaller, cleaner, battery, power, stats, health, mouse, keyboard, windows, tiling, tools, shelf, menubar, wifi, controlcenter, clock, permissions
+    // Declared in sidebar order (the Go menu shortcuts follow this order). Raw values are persisted: never rename.
+    case dashboard
+    case optimizer, cleaner, uninstaller
+    case stats, health, battery, power, wifi
+    case mouse, keyboard, windows, tiling
+    case menubar, controlcenter, clock
+    case tools, shelf
+    case permissions
 
     var id: String { rawValue }
 
@@ -78,20 +85,6 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// True when `query` matches the title, group or blurb.
-    func matches(_ query: String) -> Bool {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        if q.isEmpty { return true }
-        return title.lowercased().contains(q) || group.lowercased().contains(q) || blurb.lowercased().contains(q)
-    }
-
-    /// Group names in first-seen order (robust to new cases/groups).
-    static var groupOrder: [String] {
-        var seen: [String] = []
-        for s in allCases where !seen.contains(s.group) { seen.append(s.group) }
-        return seen
-    }
-
     var colors: [Color] {
         switch self {
         case .dashboard: Theme.Palette.dashboard
@@ -116,14 +109,15 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    var group: String {
+    var group: AppGroup {
         switch self {
-        case .dashboard: ""
-        case .optimizer, .uninstaller, .cleaner: "Clean"
-        case .battery, .power, .stats, .health: "Monitor"
-        case .mouse, .keyboard, .windows, .tiling, .tools, .shelf: "Enhance"
-        case .menubar, .wifi, .controlcenter, .clock: "Menu Bar"
-        case .permissions: "Setup"
+        case .dashboard: .overview
+        case .optimizer, .cleaner, .uninstaller: .clean
+        case .stats, .health, .battery, .power, .wifi: .monitor
+        case .mouse, .keyboard, .windows, .tiling: .input
+        case .menubar, .controlcenter, .clock: .menubar
+        case .tools, .shelf: .utilities
+        case .permissions: .setup
         }
     }
 
@@ -151,6 +145,51 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .permissions: PermissionsView()
         }
     }
+}
+
+/// Sidebar groups, in display order. Every section belongs to exactly one.
+enum AppGroup: String, CaseIterable, Identifiable {
+    case overview, clean, monitor, input, menubar, utilities, setup
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .overview: "Overview"
+        case .clean: "Clean & Optimize"
+        case .monitor: "Monitor"
+        case .input: "Input & Windows"
+        case .menubar: "Menu Bar"
+        case .utilities: "Utilities"
+        case .setup: "Setup"
+        }
+    }
+
+    var blurb: String {
+        switch self {
+        case .overview: "Your Mac at a glance"
+        case .clean: "Free space and speed things up"
+        case .monitor: "Live stats, health, battery and network"
+        case .input: "Mouse, keyboard and window management"
+        case .menubar: "Icons, Control Center and the clock"
+        case .utilities: "Handy extras"
+        case .setup: "Access MacMaster needs"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .overview: "square.grid.2x2.fill"
+        case .clean: "sparkles"
+        case .monitor: "waveform.path.ecg"
+        case .input: "cursorarrow.and.square.on.square.dashed"
+        case .menubar: "menubar.rectangle"
+        case .utilities: "wrench.and.screwdriver.fill"
+        case .setup: "lock.shield.fill"
+        }
+    }
+
+    var sections: [AppSection] { AppSection.allCases.filter { $0.group == self } }
 }
 
 extension Notification.Name {

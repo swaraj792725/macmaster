@@ -6,16 +6,22 @@ private struct MenuBarHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
-/// Popover root: a Control Center style panel. Host with `NSHostingController(rootView: MenuBarControlCenter())`.
+/// MacMaster's one dropdown, and its Control Center: header, health, live stats, the tile grid
+/// (order, size and visibility from `ControlCenterSettings`), actions and tools.
+/// Host with `NSHostingController(rootView: MenuBarControlCenter())`; `MainStatusItem` owns the popover.
 struct MenuBarControlCenter: View {
     @State private var model = MenuBarModel.shared
     @State private var monitor = SystemMonitor.shared
     @State private var battery = BatteryMonitor.shared
     @State private var health = HealthMonitor.shared
-    @State private var contentHeight: CGFloat = 520
+    @State private var contentHeight: CGFloat = MenuBarControlCenter.lastHeight
+    @State private var editing = false
     @Environment(\.openWindow) private var openWindow
 
     static let width: CGFloat = 352
+    /// Height of the last render, so the popover opens at about the right size before SwiftUI measures.
+    nonisolated(unsafe) private static var lastHeight: CGFloat = 520
+    static var initialHeight: CGFloat { min(max(lastHeight, 120), 760) }
 
     private var maxHeight: CGFloat {
         min(760, (NSScreen.main?.visibleFrame.height ?? 800) - 60)
@@ -25,23 +31,29 @@ struct MenuBarControlCenter: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 10) {
                 header
-                if model.isSectionVisible(.issues), !health.issues.isEmpty { issuesBanner }
-                if model.isSectionVisible(.stats) { statsStrip }
-                if model.isSectionVisible(.toggles) { toggleGrid }
-                if model.isSectionVisible(.sliders), model.hasBrightness || model.hasVolume { sliders }
-                if model.isSectionVisible(.actions) { actionsSection }
-                if model.isSectionVisible(.windows) { windowsSection }
-                if model.isSectionVisible(.power) { powerSection }
-                if model.isSectionVisible(.processes) { processesSection }
+                if editing {
+                    editBar
+                    ControlCenterTilesView(editing: $editing)
+                } else {
+                    if model.isSectionVisible(.issues), !health.issues.isEmpty { issuesBanner }
+                    if model.isSectionVisible(.stats) { statsStrip }
+                    if model.isSectionVisible(.toggles) { ControlCenterTilesView(editing: $editing) }
+                    if model.isSectionVisible(.actions) { actionsSection }
+                    feedback
+                    if model.isSectionVisible(.windows) { windowsSection }
+                    if model.isSectionVisible(.power) { powerSection }
+                    if model.isSectionVisible(.processes) { processesSection }
+                }
             }
             .padding(12)
             .background(GeometryReader { Color.clear.preference(key: MenuBarHeightKey.self, value: $0.size.height) })
         }
         .frame(width: Self.width, height: min(max(contentHeight, 120), maxHeight))
         .onPreferenceChange(MenuBarHeightKey.self) { h in
-            if h > 0 { contentHeight = h }
+            if h > 0 { contentHeight = h; Self.lastHeight = h }
         }
         .animation(.smooth(duration: 0.25), value: model.prefsRevision)
+        .animation(.smooth(duration: 0.25), value: editing)
         .onAppear {
             monitor.start()
             model.appeared()
@@ -78,6 +90,8 @@ struct MenuBarControlCenter: View {
             }
             Spacer(minLength: 4)
             HStack(spacing: 6) {
+                MenuBarIconButton(symbol: "slider.horizontal.below.square.and.square.filled",
+                                  help: "Edit Control Center: reorder, resize, hide") { withAnimation(.smooth) { editing.toggle() } }
                 MenuBarIconButton(symbol: "macwindow", help: "Open MacMaster") { openMain(nil) }
                 MenuBarIconButton(symbol: "gearshape.fill", help: "Settings") { openSettings() }
                 MenuBarIconButton(symbol: "power", help: "Quit MacMaster", tint: .red) { NSApp.terminate(nil) }
@@ -154,58 +168,26 @@ struct MenuBarControlCenter: View {
         .menuBarGlass(radius: 16)
     }
 
-    // MARK: Toggles
+    // MARK: Edit mode
 
-    private var toggleGrid: some View {
-        let tiles = MenuBarTile.allCases.filter { model.isTileVisible($0) }
-        let cols = model.tileColumns
-        return Group {
-            if !tiles.isEmpty {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: cols), spacing: 8) {
-                    ForEach(tiles) { t in
-                        MenuBarToggleTile(symbol: symbol(for: t), title: t.title, subtitle: model.subtitle(t),
-                                          isOn: model.isOn(t), tint: t.tint, busy: model.busy.contains(t.rawValue),
-                                          compact: cols == 3) { model.toggle(t) }
-                    }
+    private var editBar: some View {
+        HStack(spacing: 8) {
+            Text("Edit Control Center").font(.system(size: 12, weight: .semibold))
+            Spacer(minLength: 0)
+            Menu {
+                ForEach(ControlCenterPreset.allCases) { p in
+                    Button { withAnimation { ControlCenterSettings.shared.apply(p) } } label: { Label(p.title, systemImage: p.symbol) }
                 }
+                Divider()
+                Button("Reset layout") { withAnimation { ControlCenterSettings.shared.resetLayout() } }
+            } label: {
+                Label("Presets", systemImage: "square.grid.2x2").font(.system(size: 11, weight: .medium))
             }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            Button { withAnimation(.smooth) { editing = false } } label: { Text("Done").fontWeight(.semibold) }
+                .buttonStyle(.mmGhost)
         }
-    }
-
-    private func symbol(for t: MenuBarTile) -> String {
-        switch t {
-        case .darkMode: model.snapshot.darkMode ? "moon.fill" : "sun.max.fill"
-        case .wifi: model.snapshot.wifi == true ? "wifi" : "wifi.slash"
-        case .mute: model.snapshot.muted == true ? "speaker.slash.fill" : "speaker.wave.2.fill"
-        case .hideDesktop: model.snapshot.hideDesktop ? "menubar.dock.rectangle.badge.record" : "menubar.dock.rectangle"
-        default: t.symbol
-        }
-    }
-
-    // MARK: Sliders
-
-    private var sliders: some View {
-        VStack(spacing: 10) {
-            if model.hasBrightness {
-                MenuBarSlider(title: "Display", symbol: "sun.max.fill",
-                              value: Binding(get: { model.brightness }, set: { model.brightness = $0 }),
-                              onChange: { model.setBrightness($0) })
-            }
-            if model.hasVolume {
-                MenuBarSlider(title: "Sound", symbol: volumeSymbol,
-                              value: Binding(get: { model.volume }, set: { model.volume = $0 }),
-                              onChange: { model.setVolume($0) })
-            }
-        }
-        .padding(12)
-        .menuBarGlass(radius: 16)
-    }
-
-    private var volumeSymbol: String {
-        if model.snapshot.muted == true || model.volume <= 0.001 { return "speaker.slash.fill" }
-        if model.volume < 0.34 { return "speaker.wave.1.fill" }
-        if model.volume < 0.67 { return "speaker.wave.2.fill" }
-        return "speaker.wave.3.fill"
+        .padding(.horizontal, 4)
     }
 
     // MARK: Actions
@@ -265,7 +247,6 @@ struct MenuBarControlCenter: View {
                             MenuBarActionButton(action: a, busy: model.busy.contains(a.rawValue)) { model.run(a) }
                         }
                     }
-                    feedback
                 }
                 .padding(10)
                 .menuBarGlass(radius: 16)

@@ -41,6 +41,7 @@ struct KeyboardView: View {
             .transition(.opacity)
         }
         .animation(.smooth(duration: 0.25), value: tab)
+        .searchTab($tab)
         .onAppear { engine.start() }
     }
 }

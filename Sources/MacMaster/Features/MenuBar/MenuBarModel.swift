@@ -29,18 +29,11 @@ final class MenuBarModel {
     private(set) var prefsRevision = 0
     var confirm: MenuBarConfirm?
 
-    /// Slider-bound values (0...1). Not overwritten by refreshes while the user is adjusting.
-    var brightness: Double = 0.5
-    var volume: Double = 0.5
-    private var lastSliderEdit = Date.distantPast
-
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
     @ObservationIgnored private var prefsObserver: NSObjectProtocol?
     @ObservationIgnored private var lastPrefsSignature = MenuBarPrefs.signature()
     @ObservationIgnored private var holdingProcesses = false
     @ObservationIgnored private let tools = ToolsQuickActionsModel()
-    @ObservationIgnored private let sliderQueue = DispatchQueue(label: "macmaster.menubar.sliders", qos: .userInitiated)
 
     private init() {
         prefsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -53,23 +46,6 @@ final class MenuBarModel {
     }
 
     // MARK: Availability
-
-    var hasWifi: Bool { snapshot.wifi != nil }
-    var hasBluetooth: Bool { snapshot.bluetooth != nil || MenuBarSystem.bluetoothNeedsPermission }
-    var hasMute: Bool { snapshot.muted != nil }
-    var hasBrightness: Bool { snapshot.brightness != nil }
-    var hasVolume: Bool { snapshot.volume != nil }
-
-    func isTileVisible(_ t: MenuBarTile) -> Bool {
-        _ = prefsRevision
-        guard MenuBarPrefs.isOn(t.key) else { return false }
-        switch t {
-        case .wifi: return hasWifi
-        case .bluetooth: return hasBluetooth
-        case .mute: return hasMute
-        default: return true
-        }
-    }
 
     func isActionVisible(_ a: MenuBarQuickAction) -> Bool {
         _ = prefsRevision
@@ -86,53 +62,23 @@ final class MenuBarModel {
         return MenuBarPrefs.isOn(s.key)
     }
 
-    var tileColumns: Int { _ = prefsRevision; return MenuBarPrefs.tileColumns }
-
     func isOn(_ t: MenuBarTile) -> Bool {
         switch t {
-        case .keepAwake: ToolsKeepAwake.shared.isActive || ToolsKeepAwake.shared.isArmed
-        case .darkMode: snapshot.darkMode
-        case .wifi: snapshot.wifi ?? false
-        case .bluetooth: snapshot.bluetooth ?? false
         case .hideDesktop: snapshot.hideDesktop
         case .hiddenFiles: snapshot.hiddenFiles
-        case .lowPower: snapshot.lowPower
-        case .mute: snapshot.muted ?? false
         case .smoothScroll: smoothScrollOn
         case .windowSwitcher: windowSwitcherOn
         }
     }
 
-    func subtitle(_ t: MenuBarTile) -> String {
-        switch t {
-        case .keepAwake:
-            let k = ToolsKeepAwake.shared
-            if k.isActive, let r = k.remaining { return ToolsKeepAwake.countdown(r) }
-            return k.isActive ? "On" : (k.isArmed ? "Armed" : "Off")
-        case .darkMode: return snapshot.darkMode ? "Dark" : "Light"
-        case .wifi: return snapshot.wifi == true ? "On" : "Off"
-        case .bluetooth: return snapshot.bluetooth == nil ? "Allow access" : snapshot.bluetooth == true ? "On" : "Off"
-        case .mute: return snapshot.muted == true ? "Muted" : "Sound on"
-        default: return isOn(t) ? "On" : "Off"
-        }
-    }
+    func subtitle(_ t: MenuBarTile) -> String { isOn(t) ? "On" : "Off" }
 
     // MARK: Lifecycle
 
-    func appeared() {
-        refresh()
-        guard pollTask == nil else { return }
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                if Task.isCancelled { break }
-                self?.refresh()
-            }
-        }
-    }
+    /// One refresh per open; nothing polls while the dropdown is closed or open.
+    func appeared() { refresh() }
 
     func disappeared() {
-        pollTask?.cancel(); pollTask = nil
         releaseProcesses()
         confirm = nil
     }
@@ -161,10 +107,6 @@ final class MenuBarModel {
         snapshot = s
         smoothScrollOn = MouseSettings.shared.enabled && MouseSettings.shared.config.smoothEnabled
         windowSwitcherOn = WindowPreviewSettings.shared.switcherEnabled
-        if Date().timeIntervalSince(lastSliderEdit) > 1.2 {
-            if let b = s.brightness { brightness = Double(b) }
-            if let v = s.volume { volume = Double(v) }
-        }
     }
 
     // MARK: Toast
@@ -196,8 +138,6 @@ final class MenuBarModel {
 
     func toggle(_ tile: MenuBarTile) {
         switch tile {
-        case .keepAwake:
-            ToolsKeepAwake.shared.toggle()
         case .smoothScroll:
             let s = MouseSettings.shared
             var c = s.config
@@ -207,21 +147,6 @@ final class MenuBarModel {
         case .windowSwitcher:
             WindowPreviewSettings.shared.switcherEnabled.toggle()
             windowSwitcherOn = WindowPreviewSettings.shared.switcherEnabled
-        case .darkMode:
-            snapshot.darkMode.toggle()
-            perform("darkMode", settle: true) { MenuBarSystem.toggleDarkMode() }
-        case .wifi:
-            let target = !(snapshot.wifi ?? false)
-            snapshot.wifi = target
-            perform("wifi", settle: true) { MenuBarSystem.setWifi(target) }
-        case .bluetooth:
-            if snapshot.bluetooth == nil {
-                MenuBarSystem.requestBluetoothPermission()
-                return
-            }
-            let target = !(snapshot.bluetooth ?? false)
-            snapshot.bluetooth = target
-            perform("bluetooth", settle: true) { MenuBarSystem.setBluetooth(target) }
         case .hideDesktop:
             let target = !snapshot.hideDesktop
             snapshot.hideDesktop = target
@@ -235,42 +160,7 @@ final class MenuBarModel {
                 let r = await a.run()
                 return r.ok ? nil : r.message
             }
-        case .lowPower:
-            let target = !snapshot.lowPower
-            confirm = MenuBarConfirm(
-                title: target ? "Turn on Low Power Mode?" : "Turn off Low Power Mode?",
-                message: "This needs your administrator password.",
-                button: target ? "Turn On" : "Turn Off") { [weak self] in
-                    self?.snapshot.lowPower = target
-                    self?.perform("lowPower", success: target ? "Low Power Mode on" : "Low Power Mode off", settle: true) {
-                        let r = await ToolsAdmin.run("/usr/bin/pmset", ["-a", "lowpowermode", target ? "1" : "0"],
-                                                     prompt: "MacMaster needs administrator access to change Low Power Mode.")
-                        if r.status == 0 { return nil }
-                        return ToolsAdmin.isCancelled(r) ? "Cancelled" : "Could not change Low Power Mode"
-                    }
-                }
-        case .mute:
-            let target = !(snapshot.muted ?? false)
-            snapshot.muted = target
-            perform("mute") { MenuBarSystem.setMuted(target); return nil }
         }
-    }
-
-    // MARK: Sliders
-
-    func setBrightness(_ v: Double) {
-        brightness = v
-        lastSliderEdit = Date()
-        let f = Float(v)
-        sliderQueue.async { MenuBarSystem.setBrightness(f) }
-    }
-
-    func setVolume(_ v: Double) {
-        volume = v
-        lastSliderEdit = Date()
-        if v > 0, snapshot.muted == true { snapshot.muted = false }
-        let f = Float(v)
-        sliderQueue.async { MenuBarSystem.setVolume(f) }
     }
 
     // MARK: Quick actions

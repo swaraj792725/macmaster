@@ -15,8 +15,8 @@ struct KeyboardExtrasTab: View {
         VStack(alignment: .leading, spacing: Theme.spacing) {
             PermissionBanner(permission: .accessibility,
                              reason: "Cleaning mode, text expansion, the key visualizer and the ⌘Q guard all use an event tap.")
-            cleaningCard
-            snippetsSection
+            cleaningCard.searchAnchor("kbd.cleaning")
+            snippetsSection.searchAnchor("kbd.snippets")
             GroupedSection("Presentation & safety",
                            footer: "The visualizer shows keys only on screen; nothing is stored. It stays off while a password field has focus.") {
                 SettingsRow(title: "Key press visualizer", subtitle: "Show pressed keys in a glass pill at the bottom of the screen",
@@ -31,6 +31,7 @@ struct KeyboardExtrasTab: View {
                     Toggle("Hold ⌘Q to quit", isOn: $cmdQ).labelsHidden().toggleStyle(.switch)
                 }
             }
+            .searchAnchor("kbd.viz")
         }
         .sheet(item: $editing) { s in
             KeyboardSnippetEditor(draft: s, isNew: editingIsNew) { saved in

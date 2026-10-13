@@ -5,7 +5,9 @@ struct HealthView: View {
     private let monitor = HealthMonitor.shared
 
     var body: some View {
-        Page {
+        Page(jump: [PageJump("health.issues", "Issues"), PageJump("health.checklist", "Checklist"),
+                    PageJump("health.activity", "Activity"), PageJump("health.log", "Event log"),
+                    PageJump("health.settings", "Settings")]) {
             PageHeader(title: "Health",
                        subtitle: "An always-on watchdog that spots bad patterns on your Mac",
                        symbol: "waveform.path.ecg",
@@ -22,18 +24,18 @@ struct HealthView: View {
             }
 
             HealthHeroCard()
-            HealthIssuesSection()
+            HealthIssuesSection().searchAnchor("health.issues")
             PermissionBanner(permission: .accessibility,
                              reason: "Lets MacMaster detect apps that have stopped responding.")
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: Theme.spacing, alignment: .top)],
                       alignment: .leading, spacing: Theme.spacing) {
-                HealthChecklistCard()
-                HealthActivityCard()
+                HealthChecklistCard().searchAnchor("health.checklist")
+                HealthActivityCard().searchAnchor("health.activity")
             }
 
-            HealthLogCard()
-            HealthSettingsCard()
+            HealthLogCard().searchAnchor("health.log")
+            HealthSettingsCard().searchAnchor("health.settings")
         }
         .animation(.smooth, value: monitor.lastActionMessage)
         .sheet(item: Bindable(monitor).presentedTopList) { kind in

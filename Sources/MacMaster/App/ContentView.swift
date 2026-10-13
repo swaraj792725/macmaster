@@ -2,46 +2,64 @@ import SwiftUI
 
 struct ContentView: View {
     @AppStorage("mm.app.lastSection") private var stored = AppSection.dashboard.rawValue
+    /// Comma-separated `AppGroup` raw values the user collapsed. Remembered across launches.
+    @AppStorage("mm.app.collapsedGroups") private var collapsedRaw = ""
     @State private var selection: AppSection? = .dashboard
     @State private var query = ""
+    @State private var highlighted = 0
+    @State private var columns: NavigationSplitViewVisibility = .all
+    @FocusState private var searchFocused: Bool
     /// False while the window is closed or hidden for a while: the page is dropped so it stops rendering live data.
     @State private var windowShown = true
 
-    private var groups: [(String, [AppSection])] {
-        AppSection.groupOrder.compactMap { g in
-            let items = AppSection.allCases.filter { $0.group == g && $0.matches(query) }
-            return items.isEmpty ? nil : (g, items)
-        }
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var results: [SearchEntry] { searching ? AppSearch.results(for: query) : [] }
+
+    private func expanded(_ g: AppGroup) -> Binding<Bool> {
+        Binding(
+            get: { !collapsedRaw.split(separator: ",").contains(Substring(g.rawValue)) },
+            set: { open in
+                var set = Set(collapsedRaw.split(separator: ",").map(String.init))
+                if open { set.remove(g.rawValue) } else { set.insert(g.rawValue) }
+                collapsedRaw = set.sorted().joined(separator: ",")
+            })
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             List(selection: $selection) {
                 SidebarProfileCard { selection = .dashboard }
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 6, trailing: 8))
                     .selectionDisabled()
 
-                ForEach(groups, id: \.0) { group, items in
-                    Section(group) {
-                        ForEach(items) { s in
-                            SidebarRow(section: s).tag(s)
+                if searching {
+                    SearchResultsSection(query: query, results: results, highlightedIndex: highlighted, onOpen: open)
+                } else {
+                    SidebarRow(section: .dashboard).tag(AppSection.dashboard)
+                    ForEach(AppGroup.allCases.filter { $0 != .overview }) { group in
+                        Section(isExpanded: expanded(group)) {
+                            ForEach(group.sections) { s in
+                                SidebarRow(section: s).tag(s)
+                            }
+                            if group == .setup { SidebarSettingsRow() }
+                        } header: {
+                            Text(group.title).help(group.blurb)
                         }
                     }
-                }
-
-                if groups.isEmpty {
-                    Text("No results for “\(query)”")
-                        .font(.callout).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 20)
-                        .selectionDisabled()
                 }
             }
             .listStyle(.sidebar)
             .environment(\.sidebarRowSize, .large)
             .navigationSplitViewColumnWidth(min: 220, ideal: 244, max: 300)
-            .safeAreaInset(edge: .top, spacing: 0) { SidebarSearchField(text: $query) }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                SidebarSearchField(text: $query, focused: $searchFocused,
+                                   onMove: { delta in
+                                       let n = results.count
+                                       if n > 0 { highlighted = min(max(highlighted + delta, 0), n - 1) }
+                                   },
+                                   onSubmit: { if highlighted < results.count { open(results[highlighted]) } })
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { SidebarFooter() }
         } detail: {
             Group {
@@ -55,14 +73,35 @@ struct ContentView: View {
             .navigationTitle((selection ?? .dashboard).title)
         }
         .background(WindowVisibilityObserver(visible: $windowShown))
+        .background {
+            // ⌘F focuses the global search.
+            Button("") { columns = .all; searchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0).allowsHitTesting(false).accessibilityHidden(true)
+        }
         .onAppear { selection = AppSection(rawValue: stored) ?? .dashboard }
         .onChange(of: selection) { _, new in if let new { stored = new.rawValue } }
+        .onChange(of: query) { _, _ in highlighted = 0 }
         .onReceive(NotificationCenter.default.publisher(for: .openSection)) { note in
             if let raw = note.object as? String, let s = AppSection(rawValue: raw) {
                 query = ""
                 selection = s
             }
         }
+    }
+
+    /// Jump to a search result: page, tab, then scroll + highlight (see `AppSearchRouter`).
+    private func open(_ entry: SearchEntry) {
+        query = ""
+        searchFocused = false
+        if entry.opensAppSettings {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            return
+        }
+        if entry.anchor != nil || entry.tab != nil {
+            AppSearchRouter.shared.request(anchor: entry.anchor, tab: entry.tab)
+        }
+        selection = entry.section
     }
 }
 
@@ -80,20 +119,45 @@ private struct SidebarRow: View {
     }
 }
 
+/// Sidebar button that opens the app's Settings window (launch at login, Dock icon, sample interval...).
+private struct SidebarSettingsRow: View {
+    var body: some View {
+        Button {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        } label: {
+            HStack(spacing: 10) {
+                IconTile(symbol: "gearshape.fill", colors: Theme.Palette.gray, size: 24)
+                Text("App Settings").font(.body)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .selectionDisabled()
+        .help("Launch at login, Dock icon, menu bar icon and sampling")
+    }
+}
+
 /// System Settings style search field pinned above the list.
 private struct SidebarSearchField: View {
     @Binding var text: String
-    @FocusState private var focused: Bool
+    var focused: FocusState<Bool>.Binding
+    var onMove: (Int) -> Void = { _ in }
+    var onSubmit: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Search", text: $text)
+            TextField("Search features and settings", text: $text)
                 .textFieldStyle(.plain)
-                .focused($focused)
-                .onExitCommand { text = ""; focused = false }
+                .focused(focused)
+                .onSubmit(onSubmit)
+                .onKeyPress(.downArrow) { onMove(1); return .handled }
+                .onKeyPress(.upArrow) { onMove(-1); return .handled }
+                .onExitCommand { text = ""; focused.wrappedValue = false }
             if !text.isEmpty {
                 Button { text = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
@@ -104,7 +168,7 @@ private struct SidebarSearchField: View {
         .padding(.horizontal, 9).padding(.vertical, 6)
         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-            .strokeBorder(focused ? Color.accentColor.opacity(0.6) : Theme.hairline, lineWidth: focused ? 1.5 : 0.5))
+            .strokeBorder(focused.wrappedValue ? Color.accentColor.opacity(0.6) : Theme.hairline, lineWidth: focused.wrappedValue ? 1.5 : 0.5))
         .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
     }
 }

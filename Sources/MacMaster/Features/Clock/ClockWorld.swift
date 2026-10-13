@@ -95,6 +95,7 @@ struct ClockWorldTab: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                if settings.showWorldMap { ClockWorldMapView(zones: settings.worldClocks, compact: true) }
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     VStack(spacing: 6) {
                         ClockWorldRow(id: TimeZone.current.identifier, date: ctx.date, onRemove: nil)

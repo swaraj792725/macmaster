@@ -63,7 +63,8 @@ final class DropShelf {
     }
 
     private func dragTriggered(_ placement: DropShelfPlacement) {
-        guard !controller.isVisible else { return }
+        // The popover is already a drop zone; don't stack the floating shelf on top of it.
+        guard !controller.isVisible, !DropShelfMenuBar.shared.isOpen else { return }
         controller.openedByDrag = true
         controller.show(placement)
     }

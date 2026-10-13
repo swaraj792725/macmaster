@@ -42,14 +42,13 @@ enum MenuBarTextMetric: String, CaseIterable, Identifiable {
 // MARK: - Popover sections / tiles / actions
 
 enum MenuBarSection: String, CaseIterable, Identifiable {
-    case issues, stats, toggles, sliders, actions, windows, power, processes
+    case issues, stats, toggles, actions, windows, power, processes
     var id: String { rawValue }
     var title: String {
         switch self {
         case .issues: "Health issues banner"
         case .stats: "Live stats"
-        case .toggles: "Toggle tiles"
-        case .sliders: "Brightness & volume"
+        case .toggles: "Control Center tiles"
         case .actions: "Quick actions"
         case .windows: "Window tiling & hidden icons"
         case .power: "Power & timers"
@@ -61,7 +60,6 @@ enum MenuBarSection: String, CaseIterable, Identifiable {
         case .issues: "exclamationmark.triangle"
         case .stats: "gauge.with.dots.needle.50percent"
         case .toggles: "switch.2"
-        case .sliders: "slider.horizontal.3"
         case .actions: "bolt.fill"
         case .windows: "rectangle.split.2x2"
         case .power: "power"
@@ -72,46 +70,29 @@ enum MenuBarSection: String, CaseIterable, Identifiable {
 }
 
 enum MenuBarTile: String, CaseIterable, Identifiable {
-    case keepAwake, darkMode, wifi, bluetooth, hideDesktop, hiddenFiles, lowPower, mute, smoothScroll, windowSwitcher
+    /// Toggles that only MacMaster offers. Wi-Fi, Bluetooth, Dark Mode and the rest are Control Center tiles.
+    case hideDesktop, hiddenFiles, smoothScroll, windowSwitcher
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .keepAwake: "Keep Awake"
-        case .darkMode: "Dark Mode"
-        case .wifi: "Wi-Fi"
-        case .bluetooth: "Bluetooth"
         case .hideDesktop: "Hide Desktop"
         case .hiddenFiles: "Hidden Files"
-        case .lowPower: "Low Power"
-        case .mute: "Mute"
         case .smoothScroll: "Smooth Scroll"
         case .windowSwitcher: "Window Switcher"
         }
     }
     var symbol: String {
         switch self {
-        case .keepAwake: "cup.and.heat.waves.fill"
-        case .darkMode: "circle.lefthalf.filled"
-        case .wifi: "wifi"
-        case .bluetooth: "dot.radiowaves.left.and.right"
         case .hideDesktop: "menubar.dock.rectangle"
         case .hiddenFiles: "eye.fill"
-        case .lowPower: "bolt.badge.clock.fill"
-        case .mute: "speaker.slash.fill"
         case .smoothScroll: "computermouse.fill"
         case .windowSwitcher: "macwindow.on.rectangle"
         }
     }
     var tint: Color {
         switch self {
-        case .keepAwake: Color(hex: 0xF59E0B)
-        case .darkMode: Color(hex: 0x6366F1)
-        case .wifi: Color(hex: 0x0A84FF)
-        case .bluetooth: Color(hex: 0x0A84FF)
         case .hideDesktop: Color(hex: 0x14B8A6)
         case .hiddenFiles: Color(hex: 0xEC4899)
-        case .lowPower: Color(hex: 0xFACC15)
-        case .mute: Color(hex: 0xEF4444)
         case .smoothScroll: Color(hex: 0x38BDF8)
         case .windowSwitcher: Color(hex: 0x8B5CF6)
         }
@@ -190,7 +171,6 @@ enum MenuBarHooks {
 enum MenuBarPrefs {
     static let iconStyleKey = "mm.menubar.iconStyle"
     static let textMetricKey = "mm.menubar.iconTextMetric"
-    static let columnsKey = "mm.menubar.tileColumns"
 
     static func isOn(_ key: String, default d: Bool = true) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? d
@@ -204,15 +184,9 @@ enum MenuBarPrefs {
         MenuBarTextMetric(rawValue: UserDefaults.standard.string(forKey: textMetricKey) ?? "") ?? .cpu
     }
 
-    /// 2 or 3.
-    static var tileColumns: Int {
-        let v = UserDefaults.standard.object(forKey: columnsKey) as? Int ?? 2
-        return v == 3 ? 3 : 2
-    }
-
     /// Cheap fingerprint of every menu bar preference, used to detect changes.
     static func signature() -> String {
-        var s = "\(iconStyle.rawValue)|\(textMetric.rawValue)|\(tileColumns)"
+        var s = "\(iconStyle.rawValue)|\(textMetric.rawValue)"
         for x in MenuBarSection.allCases { s += isOn(x.key) ? "1" : "0" }
         for x in MenuBarTile.allCases { s += isOn(x.key) ? "1" : "0" }
         for x in MenuBarQuickAction.allCases { s += isOn(x.key) ? "1" : "0" }

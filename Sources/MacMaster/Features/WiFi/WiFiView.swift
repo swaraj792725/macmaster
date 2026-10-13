@@ -3,21 +3,22 @@ import SwiftUI
 /// Sidebar page: everything the popover shows, plus settings and the icon style picker.
 struct WiFiView: View {
     var body: some View {
-        Page {
+        Page(jump: [PageJump("wifi.speed", "Speed test"), PageJump("wifi.networks", "Networks"),
+                    PageJump("wifi.automations", "Automations"), PageJump("wifi.settings", "Settings")]) {
             PageHeader(title: "Wi-Fi",
                        subtitle: "Signal, speed, addresses and nearby networks, with a menu bar icon that can replace Apple's.",
                        symbol: "wifi", colors: Theme.Palette.blue)
             WiFiHeroCard()
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: Theme.spacing) {
-                    column { WiFiHotspotCard(); WiFiThroughputCard(); WiFiAppTrafficCard(limit: 8); WiFiLatencyCard(); WiFiSpeedTestCard() }
-                    column { WiFiDetailsCard(); WiFiNetworksCard(limit: 20) }
+                    column { WiFiHotspotCard(); WiFiThroughputCard(); WiFiAppTrafficCard(limit: 8); WiFiLatencyCard(); WiFiSpeedTestCard().searchAnchor("wifi.speed") }
+                    column { WiFiDetailsCard(); WiFiNetworksCard(limit: 20).searchAnchor("wifi.networks") }
                 }
                 .frame(minWidth: 760)
-                column { WiFiHotspotCard(); WiFiThroughputCard(); WiFiAppTrafficCard(limit: 8); WiFiLatencyCard(); WiFiSpeedTestCard(); WiFiDetailsCard(); WiFiNetworksCard(limit: 20) }
+                column { WiFiHotspotCard(); WiFiThroughputCard(); WiFiAppTrafficCard(limit: 8); WiFiLatencyCard(); WiFiSpeedTestCard().searchAnchor("wifi.speed"); WiFiDetailsCard(); WiFiNetworksCard(limit: 20).searchAnchor("wifi.networks") }
             }
-            WiFiAutomationsCard()
-            WiFiSettingsCard()
+            WiFiAutomationsCard().searchAnchor("wifi.automations")
+            WiFiSettingsCard().searchAnchor("wifi.settings")
         }
         .wifiPresence()
     }

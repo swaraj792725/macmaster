@@ -86,6 +86,7 @@ final class DropShelfDragMonitor {
 
     private var hasFiles: Bool {
         pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+            || pasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil)  // screenshot thumbnail, Photos...
     }
 
     private func edgeHit(_ p: NSPoint) -> DropShelfPlacement? {

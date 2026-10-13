@@ -9,36 +9,59 @@ final class MainStatusItem: NSObject, NSPopoverDelegate {
     private var item: NSStatusItem?
     private let popover = NSPopover()
 
+    private override init() {
+        super.init()
+        popover.behavior = .transient
+        popover.delegate = self
+    }
+
+    /// The dropdown is MacMaster's Control Center: one popover, whichever icon opened it.
+    var isShown: Bool { popover.isShown }
+
     func update() {
         let show = UserDefaults.standard.object(forKey: "mm.app.showMenuBarIcon") as? Bool ?? true
         if show, item == nil {
             let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             if let button = it.button { MenuBarIconUpdater.shared.attach(to: button, statusItem: it) }
             it.button?.target = self
-            it.button?.action = #selector(toggle)
+            it.button?.action = #selector(buttonClicked)
             item = it
-            popover.behavior = .transient
-            popover.delegate = self
-            popover.contentViewController = NSHostingController(rootView: MenuBarControlCenter())
         } else if !show, let it = item {
+            popover.performClose(nil)
             MenuBarIconUpdater.shared.detach()
             NSStatusBar.system.removeStatusItem(it)
             item = nil
         }
     }
 
-    @objc private func toggle() {
+    @objc private func buttonClicked() {
         guard let button = item?.button else { return }
-        if popover.isShown { popover.performClose(nil) }
-        else {
-            popover.showFromStatusItem(button)
-        }
+        toggle(from: button)
     }
 
-    func close() { popover.performClose(nil) }
+    /// Opens or closes the dropdown under `view` (this item's button, the optional extra icon, or the
+    /// anchor window over Apple's Control Center icon).
+    func toggle(from view: NSView) {
+        if popover.isShown { popover.performClose(nil) } else { present(from: view) }
+    }
+
+    func present(from view: NSView) {
+        // A fresh hosting controller per open: the view resets (edit mode off) and appear/disappear fire reliably.
+        let host = NSHostingController(rootView: MenuBarControlCenter())
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentSize = NSSize(width: MenuBarControlCenter.width, height: MenuBarControlCenter.initialHeight)
+        popover.contentViewController = host
+        popover.showFromStatusItem(view)
+    }
+
+    func close() { if popover.isShown { popover.performClose(nil) } }
+
+    func popoverDidClose(_ notification: Notification) {
+        popover.contentViewController = nil
+        ControlCenterModel.shared.closed()
+        AppleItemRedirect.shared.anchorDone()
+    }
 }
-
-
 
 /// Opens / focuses the main window from AppKit code.
 @MainActor

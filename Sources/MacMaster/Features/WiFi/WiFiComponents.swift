@@ -69,17 +69,21 @@ struct WiFiHeroCard: View {
                 }
                 .frame(width: 60, height: 60)
                 .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(l.qualityColor.opacity(0.25), lineWidth: 0.5))
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(title(l)).font(.system(size: 20, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.75)
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        StatusPill(text: l.quality, color: l.qualityColor)
-                        if l.isConnected, let b = l.band { chip(b.rawValue) }
-                        if l.isConnected, let phy = l.phy {
-                            chip(phy.components(separatedBy: "(").last?.trimmingCharacters(in: CharacterSet(charactersIn: "() ")) ?? phy)
+                        Text(title(l)).font(.system(size: 20, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.75)
+                        if l.isConnected, l.lockState == 1 {
+                            Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(.secondary).help("Secured network")
                         }
-                        if l.isConnected, l.lockState == 1 { Image(systemName: "lock.fill").font(.system(size: 10)).foregroundStyle(.secondary) }
+                    }
+                    // Never let the chips squeeze: drop the least useful ones first when the column is narrow.
+                    ViewThatFits(in: .horizontal) {
+                        chipRow(l, details: true)
+                        chipRow(l, details: false)
+                        qualityPill(l)
                     }
                 }
+                .layoutPriority(1)
                 Spacer(minLength: 8)
                 if l.hasInterface {
                     Toggle(isOn: Binding(get: { model.link.powerOn }, set: { model.setPower($0) })) { EmptyView() }
@@ -110,10 +114,44 @@ struct WiFiHeroCard: View {
         )
     }
 
-    private func chip(_ text: String) -> some View {
-        Text(text).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-            .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Color.primary.opacity(0.07), in: Capsule())
+    private func chipRow(_ l: WiFiLink, details: Bool) -> some View {
+        HStack(spacing: 6) {
+            qualityPill(l)
+            if l.isConnected, let b = l.band { chip(b.rawValue, icon: "antenna.radiowaves.left.and.right") }
+            if details, l.isConnected, let phy = l.phy {
+                chip(phy.components(separatedBy: "(").last?.trimmingCharacters(in: CharacterSet(charactersIn: "() ")) ?? phy, icon: nil)
+            }
+        }
+        .fixedSize()
+    }
+
+    /// Status pill: haloed dot + quality word in the quality color. Static (no animation) to keep idle CPU at zero.
+    private func qualityPill(_ l: WiFiLink) -> some View {
+        HStack(spacing: 5) {
+            ZStack {
+                if l.isConnected { Circle().fill(l.qualityColor.opacity(0.35)).frame(width: 11, height: 11) }
+                Circle().fill(l.qualityColor).frame(width: 6, height: 6)
+            }
+            .frame(width: 11, height: 11)
+            Text(l.quality).font(.caption.weight(.semibold)).foregroundStyle(l.isConnected ? l.qualityColor : .secondary)
+        }
+        .lineLimit(1)
+        .padding(.leading, 6).padding(.trailing, 9).padding(.vertical, 3)
+        .background(l.qualityColor.opacity(0.13), in: Capsule())
+        .overlay(Capsule().strokeBorder(l.qualityColor.opacity(0.22), lineWidth: 0.5))
+        .fixedSize()
+    }
+
+    private func chip(_ text: String, icon: String?) -> some View {
+        HStack(spacing: 4) {
+            if let icon { Image(systemName: icon).font(.system(size: 9, weight: .semibold)) }
+            Text(text).font(.caption.weight(.semibold))
+        }
+        .lineLimit(1)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8).padding(.vertical, 3)
+        .background(Color.primary.opacity(0.07), in: Capsule())
+        .fixedSize()
     }
 
     private func title(_ l: WiFiLink) -> String {

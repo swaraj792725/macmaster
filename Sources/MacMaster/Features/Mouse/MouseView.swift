@@ -6,7 +6,9 @@ struct MouseView: View {
     @State private var selectedButton = 3
 
     var body: some View {
-        Page {
+        Page(jump: [PageJump("mouse.scrolling", "Scrolling"), PageJump("mouse.buttons", "Buttons"),
+                    PageJump("mouse.gestures", "Gestures"), PageJump("mouse.pointer", "Pointer"),
+                    PageJump("mouse.test", "Test area")]) {
             PageHeader(title: "Mouse", subtitle: "Smooth scrolling, button remapping and gestures for external mice",
                        symbol: "computermouse.fill", colors: Theme.Palette.mouse) {
                 HStack(spacing: 12) {
@@ -22,11 +24,11 @@ struct MouseView: View {
             statsRow
 
             Group {
-                scrollingCard
-                buttonsCard
-                gesturesCard
-                pointerCard
-                MouseTestArea(engine: engine)
+                scrollingCard.searchAnchor("mouse.scrolling")
+                buttonsCard.searchAnchor("mouse.buttons")
+                gesturesCard.searchAnchor("mouse.gestures")
+                pointerCard.searchAnchor("mouse.pointer")
+                MouseTestArea(engine: engine).searchAnchor("mouse.test")
             }
             .disabled(!settings.enabled)
             .opacity(settings.enabled ? 1 : 0.55)
