@@ -161,8 +161,9 @@ final class MenuBarIconUpdater {
         button.imagePosition = .imageOnly
         button.imageScaling = .scaleProportionallyDown
         if observer == nil {
-            observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.prefsMaybeChanged() }
+            observer = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
+                // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
+                DispatchQueue.main.async { MainActor.assumeIsolated { self?.prefsMaybeChanged() } }
             }
         }
         lastPrefs = MenuBarPrefs.signature()

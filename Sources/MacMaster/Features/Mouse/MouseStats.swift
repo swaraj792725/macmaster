@@ -21,7 +21,9 @@ final class MouseStatsStore: @unchecked Sendable {
     private static let key = "mm.mouse.stats"
 
     private let state: OSAllocatedUnfairLock<(snap: MouseStatsSnapshot, dirty: Bool, nextDay: Double)>
-    private let flushQueue = DispatchQueue(label: "mm.mouse.stats.flush", qos: .utility)
+    /// Main, not a background queue: writing defaults off-main posts didChangeNotification on that thread,
+    /// which deadlocked against SwiftUI when an observer hopped to main synchronously.
+    private let flushQueue = DispatchQueue.main
     private var flushTimer: DispatchSourceTimer?
 
     private init() {

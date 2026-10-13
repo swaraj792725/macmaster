@@ -82,8 +82,9 @@ final class TilingEngine {
             }
         }
         observers.append(NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.scheduleReconfigure() }
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.scheduleReconfigure() } }
         })
         observers.append(NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in

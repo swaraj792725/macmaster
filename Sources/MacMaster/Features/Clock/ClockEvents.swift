@@ -199,6 +199,7 @@ final class ClockNextEvent {
     private var fetchedAt = Date.distantPast
     private var observing = false
     private var fetching = false
+    private var tokens: [(NotificationCenter, NSObjectProtocol)] = []
 
     private init() {}
 
@@ -209,25 +210,22 @@ final class ClockNextEvent {
         let s = ClockSettings.shared.showNextEvent
         if s, !observing {
             observing = true
+            // queue: nil + async hop: EventKit and the day/clock notifications can be posted off the main
+            // thread, and a `.main` queue would make that thread wait on main (possible deadlock).
+            let refetch: @Sendable (Notification) -> Void = { _ in
+                DispatchQueue.main.async { MainActor.assumeIsolated { ClockNextEvent.shared.fetch() } }
+            }
             let nc = NotificationCenter.default
-            nc.addObserver(forName: .EKEventStoreChanged, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { ClockNextEvent.shared.fetch() }
+            for n in [Notification.Name.EKEventStoreChanged, .calendarAuthorizationChanged, .NSCalendarDayChanged, .NSSystemClockDidChange] {
+                tokens.append((nc, nc.addObserver(forName: n, object: nil, queue: nil, using: refetch)))
             }
-            nc.addObserver(forName: .calendarAuthorizationChanged, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { ClockNextEvent.shared.fetch() }
-            }
-            for n in [Notification.Name.NSCalendarDayChanged, .NSSystemClockDidChange] {
-                nc.addObserver(forName: n, object: nil, queue: .main) { _ in
-                    MainActor.assumeIsolated { ClockNextEvent.shared.fetch() }
-                }
-            }
-            NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { ClockNextEvent.shared.fetch() }
-            }
+            let ws = NSWorkspace.shared.notificationCenter
+            tokens.append((ws, ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: nil, using: refetch)))
             fetch()
         } else if !s, observing {
             observing = false
-            NotificationCenter.default.removeObserver(self)
+            for (center, token) in tokens { center.removeObserver(token) }
+            tokens = []
             events = []
             fetchedAt = .distantPast
         }

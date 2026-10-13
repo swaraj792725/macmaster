@@ -43,12 +43,13 @@ final class MenuBarModel {
     @ObservationIgnored private let sliderQueue = DispatchQueue(label: "macmaster.menubar.sliders", qos: .userInitiated)
 
     private init() {
-        prefsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
+        prefsObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
+            DispatchQueue.main.async { MainActor.assumeIsolated {
                 guard let self else { return }
                 let s = MenuBarPrefs.signature()
                 if s != self.lastPrefsSignature { self.lastPrefsSignature = s; self.prefsRevision += 1 }
-            }
+            } }
         }
     }
 

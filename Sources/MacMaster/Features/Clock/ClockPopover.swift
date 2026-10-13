@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import EventKit
+import Combine
 
 /// Popover content: big clock, then Calendar / World / System tabs.
 struct ClockPopoverView: View {
@@ -34,7 +35,7 @@ struct ClockPopoverView: View {
         .frame(width: Self.width, height: Self.height)
         // Fetch only while the popover is open: once on open, then when Calendar data changes.
         .task { events.reload() }
-        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged)) { _ in events.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: .EKEventStoreChanged).receive(on: DispatchQueue.main)) { _ in events.reload() }
         .onReceive(NotificationCenter.default.publisher(for: .calendarAuthorizationChanged)) { _ in events.reload() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in events.reload() }
     }

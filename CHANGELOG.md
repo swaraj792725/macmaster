@@ -4,6 +4,13 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.3.0] - 2026-10-13
+
+### Fixed
+- MacMaster could freeze for good, usually while you scrolled. Saving mouse stats in the background could deadlock with the interface. Settings changes no longer make any background work wait for the interface.
+- The menu bar "next event" could freeze the same way when Calendar changed, at midnight, or after a clock change.
+- Turning the menu bar "next event" off and on no longer piles up duplicate refreshes.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

@@ -37,7 +37,7 @@ private struct MenuBarManagerDropdownSizeKey: PreferenceKey {
 /// every Space; closes on an outside click, Escape, a Space change or another app coming forward.
 @MainActor
 final class MenuBarManagerDropdownController {
-    static let maxRowWidth: CGFloat = 320
+    nonisolated static let maxRowWidth: CGFloat = 320
 
     let model = MenuBarManagerDropdownModel()
     private var panel: MenuBarManagerDropdownNSPanel?

@@ -48,8 +48,9 @@ final class KeyboardEngine {
         cleaning.onChange = { [weak self] in self?.cleaningActive = self?.cleaning.isActive ?? false }
 
         defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.scheduleReconcile() }
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.scheduleReconcile() } }
         }
         terminateObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in

@@ -225,7 +225,8 @@ extension MenuBarManager {
             MainActor.assumeIsolated { self?.restoreForQuit() }
         })
         observers.append(nc.addObserver(forName: UserDefaults.didChangeNotification,
-                                        object: nil, queue: .main) { [weak self] _ in
+                                        object: nil, queue: nil) { [weak self] _ in
+            // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
             Task { @MainActor in self?.prefsChanged() }
         })
         // Frontmost-app tracking only serves Classic's auto re-hide.

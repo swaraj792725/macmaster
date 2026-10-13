@@ -31,7 +31,8 @@ final class StatsMenuBarController: NSObject, NSPopoverDelegate {
         BatteryAlerts.shared.start()
 
         defaultsObserver = NotificationCenter.default.addObserver(
-            forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
+            // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
             Task { @MainActor in self?.tick() }
         }
         tick()
