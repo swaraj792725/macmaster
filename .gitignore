@@ -1,0 +1,17 @@
+# Build output
+.build/
+.build-*/
+build/
+*.dmg
+
+# SwiftPM / Xcode
+.swiftpm/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+
+# macOS
+.DS_Store
+
+# Local tooling
+graphify-out/
