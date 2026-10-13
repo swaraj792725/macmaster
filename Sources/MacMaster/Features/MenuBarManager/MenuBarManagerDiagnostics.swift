@@ -61,7 +61,7 @@ enum MenuBarManagerDiagnostics {
             s += "  \(n): len=\(it.length) visible=\(it.isVisible) win#=\(w?.windowNumber ?? -1) appkit=\(w?.frame ?? .zero) "
             s += "cg=\(m.frame(of: it).map { "\($0)" } ?? "nil") screen=\(w?.screen?.localizedName ?? "nil")\n"
         }
-        let raw = MenuBarManagerScanner.axStatusItems(apps: m.runningAppRefs())
+        let raw = MenuBarManagerScanner.axStatusItems(apps: m.runningAppRefs(), own: MenuBarManagerScanner.ownStatusItems())
         s += "  AX items: \(raw.count)\n"
         for r in raw.sorted(by: { $0.frame.minX < $1.frame.minX }) {
             s += "    \(r.ownerName) [\(r.identifier)] '\(r.title)' \(r.frame)\n"

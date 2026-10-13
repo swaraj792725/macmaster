@@ -111,10 +111,11 @@ extension MenuBarManager {
         defer { dropdownScanning = false }
 
         let apps = runningAppRefs()
+        let own = MenuBarManagerScanner.ownStatusItems()
         let trusted = Permissions.isGranted(.accessibility)
         let raw = await Task.detached(priority: .userInitiated) { () -> [MenuBarManagerRawWindow] in
             var r: [MenuBarManagerRawWindow] = []
-            if trusted { r = MenuBarManagerScanner.axStatusItems(apps: apps) }
+            if trusted { r = MenuBarManagerScanner.axStatusItems(apps: apps, own: own) }
             if r.isEmpty { r = MenuBarManagerScanner.statusWindows() } // older macOS: per-item windows
             return r
         }.value
@@ -235,6 +236,14 @@ extension MenuBarManager {
                 self?.dropdown.hide()
                 try? await Task.sleep(nanoseconds: 120_000_000)
                 await MenuBarManagerAutomation.click(at: center, flags: .maskAlternate)
+                return
+            }
+            // Our own items: click them through AppKit. Never AX into our own process (see `SelfAX`).
+            if e.appRef.pid == SelfAX.pid {
+                self?.dropdown.hide()
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                if MenuBarManagerScanner.pressOwn(stableKey: e.id, secondary: kind == .secondary) { return }
+                if onScreen { await MenuBarManagerAutomation.click(at: center, right: kind == .secondary) }
                 return
             }
             if trusted {

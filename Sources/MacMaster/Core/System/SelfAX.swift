@@ -2,9 +2,10 @@ import CoreGraphics
 import Foundation
 
 /// Keeps MacMaster's Accessibility clients away from MacMaster itself. An AX request aimed at our own
-/// windows is answered by our own main thread inside SwiftUI's accessibility code; if that throws,
-/// HIServices swallows the exception and SwiftUI's update lock can stay held, freezing the app at the
-/// next UI event. Window hit-tests and window queries skip our own process instead.
+/// process is answered in-process, on the asking (background) thread, so our AppKit/SwiftUI accessibility
+/// code runs off main. AppKit then raises ("NSWindow geometry should only be modified on the main thread"),
+/// HIServices swallows the exception, SwiftUI's update lock stays held and the app freezes.
+/// Window hit-tests, window queries and the menu bar scanner skip our own process and use AppKit instead.
 enum SelfAX {
     static let pid = ProcessInfo.processInfo.processIdentifier
 

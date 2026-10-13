@@ -8,6 +8,7 @@ enum MenuBarManagerAutomation {
 
     /// Press a status item through Accessibility (AXExtrasMenuBar children, matched by frame).
     nonisolated static func pressViaAccessibility(pid: pid_t, frame: CGRect) async -> Bool {
+        guard pid != SelfAX.pid else { return false } // our own items get a synthetic click instead
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 0.6)
         var barRef: CFTypeRef?

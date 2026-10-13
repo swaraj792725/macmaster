@@ -96,11 +96,12 @@ enum MenuBarManagerScanner {
 
     /// Walks `AXExtrasMenuBar` of every app (plus system agents) and returns each extra's frame.
     /// Blocking; call off the main thread. Needs Accessibility.
-    nonisolated static func axStatusItems(apps: [MenuBarManagerAppRef]) -> [MenuBarManagerRawWindow] {
+    /// `own` is MacMaster's own items from `ownStatusItems()`; our process is never asked through AX.
+    nonisolated static func axStatusItems(apps: [MenuBarManagerAppRef], own: [MenuBarManagerRawWindow]) -> [MenuBarManagerRawWindow] {
         var all = apps
         let known = Set(apps.map(\.pid))
         for e in extraAgentPids() where !known.contains(e.pid) { all.append(e) }
-        all = all.filter { $0.pid > 0 }
+        all = all.filter { $0.pid > 0 && $0.pid != SelfAX.pid }
 
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.1)
         let lock = NSLock()
@@ -110,7 +111,64 @@ enum MenuBarManagerScanner {
             guard !found.isEmpty else { return }
             lock.lock(); results.append(contentsOf: found); lock.unlock()
         }
-        return results
+        return results.isEmpty ? [] : results + own
+    }
+
+    /// MacMaster's own status items, read through AppKit with the same ids and keys `axLeaves` would give
+    /// them. Asking AX about our own process runs our accessibility code on the asking (background) thread;
+    /// an exception there leaves SwiftUI's lock held and freezes the app. See `SelfAX`.
+    @MainActor static func ownStatusItems() -> [MenuBarManagerRawWindow] {
+        let pid = SelfAX.pid
+        let name = NSRunningApplication.current.localizedName ?? "MacMaster"
+        let owner = Bundle.main.bundleIdentifier ?? name
+        var ordinals: [String: Int] = [:]
+        var out: [MenuBarManagerRawWindow] = []
+        for (item, w) in ownItems() {
+            // Keys use what AX reported for our buttons (their accessibility identifier, normally empty),
+            // so saved favorites and hidden items keep matching.
+            let ident = item.button?.accessibilityIdentifier() ?? ""
+            let title = item.button?.title ?? ""
+            let desc = item.button?.accessibilityLabel() ?? ""
+            let label = !title.isEmpty ? title : (!desc.isEmpty ? desc : ident)
+            let base = "\(pid)|\(ident.isEmpty ? label : ident)"
+            let n = ordinals[base, default: 0]
+            ordinals[base] = n + 1
+            let key = "\(base)|\(n)"
+            out.append(MenuBarManagerRawWindow(
+                id: fnv(key), pid: pid, ownerName: name, title: label,
+                frame: MenuBarManagerGeometry.cgRect(fromAppKit: w.frame),
+                layer: statusLevel, isOnScreen: true, identifier: item.autosaveName ?? ident, key: key,
+                bundleID: owner, stableKey: "\(owner)|\(ident.isEmpty ? label : ident)|\(n)"))
+        }
+        return out
+    }
+
+    /// Clicks one of our own status items (by `stableKey` from `ownStatusItems()`). False if it's gone.
+    @MainActor static func pressOwn(stableKey: String, secondary: Bool = false) -> Bool {
+        let own = ownStatusItems()
+        guard let i = own.firstIndex(where: { $0.stableKey == stableKey }) else { return false }
+        let items = ownItems()
+        guard i < items.count, let button = items[i].0.button else { return false }
+        if secondary, let menu = items[i].0.menu {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        } else {
+            button.performClick(nil)
+        }
+        return true
+    }
+
+    /// Visible status bar windows on a screen and their items, in window order. `statusItem` is AppKit's own
+    /// (undocumented) back pointer from NSStatusBarWindow; checked before use. macOS 26+ also keeps parked
+    /// copies of each window below the screen; those are skipped.
+    @MainActor private static func ownItems() -> [(NSStatusItem, NSWindow)] {
+        let sel = NSSelectorFromString("statusItem")
+        let screens = NSScreen.screens.map(\.frame)
+        return NSApp.windows.compactMap { w in
+            guard w.isVisible, w.frame.width > 0, w.frame.height > 0,
+                  screens.contains(where: { $0.intersects(w.frame) }),
+                  w.responds(to: sel), let item = w.value(forKey: "statusItem") as? NSStatusItem else { return nil }
+            return (item, w)
+        }
     }
 
     /// One menu bar item of an app: the AX element to act on plus its raw record.
@@ -122,6 +180,7 @@ enum MenuBarManagerScanner {
     /// Items of one app's `AXExtrasMenuBar`. macOS 26+ wraps system items (Wi-Fi, clock...) in AXGroup /
     /// AXHostingView children of MenuBarAgent; descend to the inner AXMenuBarItem so they get a real identifier.
     nonisolated static func axLeaves(of app: MenuBarManagerAppRef, timeout: Float = 0.1) -> [AXLeaf] {
+        guard app.pid != SelfAX.pid else { return [] }
         let el = AXUIElementCreateApplication(app.pid)
         AXUIElementSetMessagingTimeout(el, timeout)
         var barRef: CFTypeRef?

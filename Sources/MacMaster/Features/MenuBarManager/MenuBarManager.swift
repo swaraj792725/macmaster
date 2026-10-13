@@ -121,6 +121,7 @@ final class MenuBarManager {
         let screen = NSScreen.screens.first
         let strip = screen.map { MenuBarManagerGeometry.stripRect(of: $0) }
         let apps = runningAppRefs()
+        let own = MenuBarManagerScanner.ownStatusItems()
         let trusted = Permissions.isGranted(.accessibility)
         let restoreCollapsed = MenuBarManagerPrefs.bool(MenuBarManagerPrefs.collapsedKey, default: false)
 
@@ -129,7 +130,7 @@ final class MenuBarManager {
             let base: Double? = await Task.detached(priority: .utility) { () -> Double? in
                 guard let strip else { return nil }
                 var raw: [MenuBarManagerRawWindow] = []
-                if trusted { raw = MenuBarManagerScanner.axStatusItems(apps: apps) }
+                if trusted { raw = MenuBarManagerScanner.axStatusItems(apps: apps, own: own) }
                 if raw.isEmpty { raw = MenuBarManagerScanner.statusWindows() }
                 let xs = raw
                     .filter { $0.frame.minX >= strip.minX && $0.frame.maxX <= strip.maxX && abs($0.frame.minY - strip.minY) < 8 }
@@ -574,10 +575,11 @@ final class MenuBarManager {
         guard isRunning else { return }
         if runningMode == .dropdown { await refreshDropdownInventory(); return }
         let apps = runningAppRefs()
+        let own = MenuBarManagerScanner.ownStatusItems()
         let trusted = Permissions.isGranted(.accessibility)
         let raw = await Task.detached(priority: .utility) { () -> [MenuBarManagerRawWindow] in
             var r: [MenuBarManagerRawWindow] = []
-            if trusted { r = MenuBarManagerScanner.axStatusItems(apps: apps) }
+            if trusted { r = MenuBarManagerScanner.axStatusItems(apps: apps, own: own) }
             if r.isEmpty { r = MenuBarManagerScanner.statusWindows() } // older macOS: per-item windows
             return r
         }.value

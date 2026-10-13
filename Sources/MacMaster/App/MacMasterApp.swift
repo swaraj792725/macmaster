@@ -50,6 +50,7 @@ struct MacMasterApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        ExceptionTripwire.install()
         let hideDock = UserDefaults.standard.bool(forKey: "mm.app.hideDockIcon")
         NSApp.setActivationPolicy(hideDock ? .accessory : .regular)
         if !Onboarding.isNeeded { Notifier.requestAuthorization() }
