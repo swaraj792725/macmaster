@@ -51,6 +51,8 @@ enum DebugSnapshot {
             }
             if perf != nil { try? report.write(toFile: dir + "/perf.txt", atomically: true, encoding: .utf8) }
             await captureMenuBar(to: URL(fileURLWithPath: dir).appendingPathComponent("popover.png"))
+            await capturePopover(StatsPopoverView(module: .battery), width: 340,
+                                 to: URL(fileURLWithPath: dir).appendingPathComponent("popover-battery.png"))
             if ProcessInfo.processInfo.environment["MM_SNAPSHOT_QUIT"] != nil { NSApp.terminate(nil) }
         }
     }
@@ -105,9 +107,18 @@ enum DebugSnapshot {
 
     /// Renders the menu bar popover offscreen.
     static func captureMenuBar(to url: URL) async {
-        let host = NSHostingView(rootView: MenuBarControlCenter())
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 352, height: 900), styleMask: [.borderless],
+        await capturePopover(MenuBarControlCenter(), width: 352, to: url)
+    }
+
+    /// Renders a popover-sized view offscreen in dark mode, sized to fit its content.
+    static func capturePopover<V: View>(_ view: V, width: CGFloat, to url: URL) async {
+        let dark = ProcessInfo.processInfo.environment["MM_SNAPSHOT_LIGHT"] == nil
+        let host = NSHostingView(rootView: view
+            .background(Color(nsColor: .windowBackgroundColor))   // cacheDisplay skips the window background
+            .environment(\.colorScheme, dark ? .dark : .light))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 900), styleMask: [.borderless],
                               backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         window.contentView = host
         window.backgroundColor = .windowBackgroundColor
         window.orderFrontRegardless()
@@ -115,10 +126,12 @@ enum DebugSnapshot {
         let fit = host.fittingSize
         if fit.width > 0, fit.height > 0 { window.setContentSize(fit) }
         try? await Task.sleep(for: .seconds(1))
-        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
-        host.cacheDisplay(in: host.bounds, to: rep)
-        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        if let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        }
         window.orderOut(nil)
+        window.contentView = nil
     }
 
     /// `MM_HUNTER_DUMP=1` prints Leftover Hunter results to stdout and quits (no UI, nothing removed).

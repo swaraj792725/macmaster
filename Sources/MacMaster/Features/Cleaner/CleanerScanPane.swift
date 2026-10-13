@@ -73,7 +73,7 @@ struct CleanerScanPane: View {
                         .font(.system(size: 42, weight: .bold, design: .rounded)).monospacedDigit()
                         .foregroundStyle(Theme.gradient(Theme.Palette.cleaner))
                         .contentTransition(.numericText())
-                    Text("selected of \(Fmt.bytes(engine.totalReclaimable)) found · \(engine.selectedItems.count) items")
+                    Text("selected of \(Fmt.bytes(engine.totalReclaimable)) found · \(Fmt.count(engine.selectedItems.count, "item"))")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

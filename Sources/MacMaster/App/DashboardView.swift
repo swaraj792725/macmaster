@@ -58,7 +58,7 @@ struct DashboardView: View {
                     .lineLimit(1)
                 Text(info.chip)
                     .font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary)
-                Text("\(Fmt.bytes(info.memory)) memory · \(info.logicalCores) cores · \(info.osVersion)")
+                Text("\(Fmt.memory(info.memory)) memory · \(info.logicalCores) cores · \(info.osVersion)")
                     .font(.callout).foregroundStyle(.secondary)
                     .lineLimit(2)
                 HStack(spacing: 8) {

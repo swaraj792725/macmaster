@@ -358,7 +358,7 @@ enum OptimizerScoring {
         // Uptime
         let days = s.uptime / 86_400
         let upPenalty = days > 30 ? 10 : days > 14 ? 6 : days > 7 ? 2 : 0
-        let upNote = days >= 1 ? "Up for \(Int(days)) days" : "Restarted recently"
+        let upNote = days >= 1 ? "Up for \(Fmt.count(Int(days), "day"))" : "Restarted recently"
         factors.append(OptimizerScoreFactor(id: "uptime", title: "Uptime", symbol: "clock", penalty: upPenalty,
                                             note: upNote, colors: OptimizerCategory.system.colors))
 

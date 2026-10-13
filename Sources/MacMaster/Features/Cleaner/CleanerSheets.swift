@@ -19,7 +19,7 @@ struct CleanerConfirmSheet: View {
                 IconTile(symbol: "sparkles", colors: Theme.Palette.cleaner, size: 40)
                 VStack(alignment: .leading) {
                     Text("Ready to clean").font(.title2.weight(.bold))
-                    Text("\(items.count) items · \(Fmt.bytes(engine.selectedBytes))").foregroundStyle(.secondary)
+                    Text("\(Fmt.count(items.count, "item")) · \(Fmt.bytes(engine.selectedBytes))").foregroundStyle(.secondary)
                 }
             }
             ScrollView {

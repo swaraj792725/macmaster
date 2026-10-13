@@ -123,7 +123,7 @@ struct OptimizerLiveGraphs: View {
         let points = Array(monitor.history.suffix(60))
         HStack(spacing: Theme.spacing) {
             graph(title: "Memory", symbol: "memorychip", color: Theme.Palette.memory,
-                  value: Fmt.percent(monitor.memory.usedFraction), caption: "\(Fmt.bytes(monitor.memory.used)) of \(Fmt.bytes(monitor.memory.total))",
+                  value: Fmt.percent(monitor.memory.usedFraction), caption: "\(Fmt.memory(monitor.memory.used)) of \(Fmt.memory(monitor.memory.total))",
                   values: points.map(\.memory))
             graph(title: "CPU", symbol: "cpu", color: Theme.Palette.cpu,
                   value: Fmt.percent(monitor.cpu.total), caption: "\(SystemInfo.current.logicalCores) cores",

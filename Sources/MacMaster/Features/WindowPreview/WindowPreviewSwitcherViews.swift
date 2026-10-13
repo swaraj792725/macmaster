@@ -137,7 +137,7 @@ struct WindowPreviewSwitcherTile: View {
                     .background(.ultraThinMaterial, in: Capsule())
                     .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 0.5))
                     .padding(8)
-                    .help("\(item.appWindowCount) windows")
+                    .help(Fmt.count(item.appWindowCount, "window"))
             }
         }
     }

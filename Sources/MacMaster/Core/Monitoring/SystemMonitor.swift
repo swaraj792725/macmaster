@@ -145,10 +145,16 @@ final class BatteryMonitor {
         fastTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        // The charge limit explains "plugged in, not charging", so read it up front and keep it current
+        // (it can also change in System Settings).
         historyTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.record() }
+            Task { @MainActor in
+                self?.record()
+                await BatteryChargeLimiter.shared.refresh()
+            }
         }
         record()
+        Task { await BatteryChargeLimiter.shared.refresh() }
     }
 
     func refresh() {

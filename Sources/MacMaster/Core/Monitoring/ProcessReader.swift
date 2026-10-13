@@ -59,7 +59,8 @@ final class ProcessReader {
         }
         lastCPUTime = nextCPU
         if names.count > nextCPU.count + 64 { names = names.filter { nextCPU[$0.key] != nil } }
-        return result
+        // The first read only sets the baseline: every CPU value would be 0 and the ranking meaningless.
+        return interval > 0 ? result : []
     }
 
     /// proc_name per pid, remembered while the process (same start time) lives.

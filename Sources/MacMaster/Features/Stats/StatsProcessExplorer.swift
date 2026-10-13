@@ -26,7 +26,7 @@ struct StatsProcessExplorer: View {
                 IconTile(symbol: "list.bullet.rectangle.fill", colors: Theme.Palette.stats, size: 34)
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Process explorer").font(.headline)
-                    Text("\(rows.count) processes · right-click to quit").font(.caption).foregroundStyle(.secondary)
+                    Text("\(Fmt.count(rows.count, "process", plural: "processes")) · right-click to quit").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 HStack(spacing: 6) {

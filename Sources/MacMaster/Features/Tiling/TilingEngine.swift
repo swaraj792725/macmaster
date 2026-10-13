@@ -53,8 +53,7 @@ final class TilingEngine {
     private init() {
         TilingSettings.registerDefaults()
         savedLayouts = Store.load([TilingSavedLayout].self, from: "tiling-layouts.json") ?? []
-        let own = ProcessInfo.processInfo.processIdentifier
-        if let f = NSWorkspace.shared.frontmostApplication, f.processIdentifier != own { lastFrontmost = f }
+        if let f = NSWorkspace.shared.frontmostApplication, Self.isTargetable(f) { lastFrontmost = f }
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil,
                                         queue: .main) { [weak self] note in
@@ -64,9 +63,14 @@ final class TilingEngine {
     }
 
     private func noteActivated(_ app: NSRunningApplication?) {
-        guard let app, app.processIdentifier != TilingAX.ownPID, app.activationPolicy == .regular,
-              app.bundleIdentifier != "com.apple.dock" else { return }
+        guard let app, Self.isTargetable(app) else { return }
         lastFrontmost = app
+    }
+
+    /// Regular apps only: skips MacMaster, the Dock and agents such as UserNotificationCenter.
+    private static func isTargetable(_ app: NSRunningApplication) -> Bool {
+        app.processIdentifier != TilingAX.ownPID && app.activationPolicy == .regular
+            && app.bundleIdentifier != "com.apple.dock"
     }
 
     // MARK: Lifecycle
@@ -202,8 +206,7 @@ final class TilingEngine {
 
     /// App whose focused window actions should target: the frontmost app, or the last one before MacMaster.
     func targetApplication() -> NSRunningApplication? {
-        if let f = NSWorkspace.shared.frontmostApplication, f.processIdentifier != TilingAX.ownPID,
-           f.bundleIdentifier != "com.apple.dock" { return f }
+        if let f = NSWorkspace.shared.frontmostApplication, Self.isTargetable(f) { return f }
         if let l = lastFrontmost, !l.isTerminated { return l }
         return nil
     }
@@ -252,7 +255,7 @@ final class TilingEngine {
                     guard !wins.isEmpty else { self.flash("No windows found"); return }
                     self.savedLayouts.insert(TilingSavedLayout(name: title, date: Date(), windows: wins), at: 0)
                     Store.save(self.savedLayouts, to: "tiling-layouts.json")
-                    self.flash("Saved \(wins.count) windows")
+                    self.flash("Saved \(Fmt.count(wins.count, "window"))")
                 }
             }
         }

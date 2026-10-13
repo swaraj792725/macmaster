@@ -299,7 +299,7 @@ struct MenuBarManagerQuickToggle: View {
     private var dropdownSubtitle: String {
         guard manager.isRunning else { return "Off" }
         let n = manager.dropdownEntries.count
-        return n > 0 ? "\(n) items" : "Open list"
+        return n > 0 ? Fmt.count(n, "item") : "Open list"
     }
 
     private func subtitle(on: Bool) -> String {

@@ -359,3 +359,19 @@ struct EmptyStateView: View {
         .padding(40)
     }
 }
+
+// MARK: - Relative time
+
+/// "Checked 5 min ago", "Checked just now". Updates every 30 s. `Text(_, style: .relative)` reads
+/// "37 min, 21 sec" and ticks every second, which is noisy for a status caption.
+struct AgoText: View {
+    let prefix: String
+    let date: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            Text(ctx.date.timeIntervalSince(date) < 60 ? "\(prefix) just now"
+                 : "\(prefix) \(date.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)))")
+        }
+    }
+}

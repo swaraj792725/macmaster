@@ -150,5 +150,7 @@ private struct ToolsCard: View {
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(.smooth(duration: 0.18)) { hover = h } }
+        // The grid is swapped out when a tool opens, so the hover-exit event never arrives.
+        .onDisappear { hover = false }
     }
 }

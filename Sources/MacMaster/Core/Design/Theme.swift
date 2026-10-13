@@ -130,6 +130,11 @@ extension Color {
 // MARK: - Formatting helpers
 
 enum Fmt {
+    /// "1 item", "3 items".
+    static func count(_ n: Int, _ noun: String, plural: String? = nil) -> String {
+        "\(n) \(n == 1 ? noun : plural ?? noun + "s")"
+    }
+
     // Formatters are thread-safe for formatting; reuse them instead of building one per call.
     nonisolated(unsafe) private static let fileFormatter = makeByteFormatter(.file)
     nonisolated(unsafe) private static let decimalFormatter = makeByteFormatter(.decimal)
@@ -148,6 +153,8 @@ enum Fmt {
         }
     }
     static func bytes(_ value: UInt64) -> String { bytes(Int64(clamping: value)) }
+    /// RAM in binary units, so 16 GiB reads "16 GB" like About This Mac (not "17.18 GB").
+    static func memory(_ value: UInt64) -> String { bytes(Int64(clamping: value), style: .memory) }
 
     /// Throughput like "1.2 MB/s".
     static func rate(_ bytesPerSecond: Double) -> String {

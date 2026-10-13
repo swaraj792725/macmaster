@@ -212,8 +212,11 @@ enum CleanerRemover {
         }
         var failedItems = Set<UUID>()
         for (i, c) in commands.enumerated() where failed.contains(i) { failedItems.insert(c.item.id) }
+        let attempted = Set(commands.map(\.item.id))
         for item in items {
-            if failedItems.contains(item.id) {
+            if !attempted.contains(item.id) {
+                out.failures.append(CleanerFailure(name: item.name, reason: "This location isn't allowed to be removed"))
+            } else if failedItems.contains(item.id) {
                 out.failures.append(CleanerFailure(name: item.name, reason: "Administrator command failed"))
             } else {
                 out.freed += item.size

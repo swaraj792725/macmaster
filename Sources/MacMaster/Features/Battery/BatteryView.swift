@@ -21,6 +21,7 @@ struct BatteryView: View {
                     .card()
             } else {
                 BatteryHeroCard(reading: r, history: monitor.history)
+                BatteryChargeLimitCard(reading: r)
                 BatteryTipsCard(tips: BatteryTips.make(reading: r, history: monitor.history))
 
                 LazyVGrid(columns: columns, spacing: Theme.spacing) {
@@ -33,7 +34,6 @@ struct BatteryView: View {
                 }
 
                 BatteryChartsSection()
-                BatteryChargeLimitCard(reading: r)
             }
         }
         .onAppear { monitor.start(); monitor.refresh() }
@@ -68,7 +68,7 @@ private struct BatteryHeroCard: View {
                     if r.optimizedCharging == true {
                         StatusPill(text: "Optimized charging", color: .green)
                     }
-                    StatusPill(text: "\(r.cycleCount) cycles", color: .gray)
+                    StatusPill(text: Fmt.count(r.cycleCount, "cycle"), color: .gray)
                 }
                 .padding(.top, 2)
             }

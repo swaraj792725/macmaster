@@ -82,11 +82,12 @@ enum UninstallerRemover {
         // 2. User-removable items first.
         var adminFiles: [UninstallerItem] = []
         var removedFiles: [UninstallerItem] = []
+        var alreadyGone: [UninstallerItem] = []   // vanished before we got to them: drop from the list, don't count
         var touchedPrefs = false
         for (i, item) in files.enumerated() {
             if Task.isCancelled { break }
             progress("Removing \(item.name)  (\(i + 1)/\(files.count))")
-            if !UninstallerPaths.exists(item.url) { removedFiles.append(item); continue }
+            if !UninstallerPaths.exists(item.url) { alreadyGone.append(item); continue }
             if !fm.isDeletableFile(atPath: item.url.path) || (item.requiresAdmin && !item.isUserDomain) {
                 adminFiles.append(item); continue
             }
@@ -161,6 +162,7 @@ enum UninstallerRemover {
             summary.freed += item.size
             summary.removedIDs.insert(item.id)
         }
+        for item in alreadyGone { summary.removedIDs.insert(item.id) }
         for item in nestedCovered where removedFiles.contains(where: { parent in
             item.url.standardizedFileURL.path.hasPrefix(parent.url.standardizedFileURL.path + "/")
         }) {

@@ -289,7 +289,7 @@ struct TilingView: View {
             } else {
                 ForEach(engine.savedLayouts) { layout in
                     SettingsRow(title: layout.name,
-                                subtitle: "\(layout.windows.count) windows · \(layout.date.formatted(date: .abbreviated, time: .shortened))") {
+                                subtitle: "\(Fmt.count(layout.windows.count, "window")) · \(layout.date.formatted(date: .abbreviated, time: .shortened))") {
                         HStack(spacing: 8) {
                             Button("Restore") { engine.restoreLayout(layout) }.buttonStyle(.mmSecondary)
                             Button { engine.deleteLayout(layout) } label: { Image(systemName: "trash") }

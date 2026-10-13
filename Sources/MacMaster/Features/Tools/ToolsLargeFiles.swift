@@ -235,7 +235,7 @@ struct ToolsLargeFilesView: View {
 
     private var actionBar: some View {
         HStack(spacing: 12) {
-            Text("\(model.results.count) files · \(Fmt.bytes(model.totalSize))").foregroundStyle(.secondary)
+            Text("\(Fmt.count(model.results.count, "file")) · \(Fmt.bytes(model.totalSize))").foregroundStyle(.secondary)
             Spacer()
             let sel = model.selectedItems
             if !sel.isEmpty {

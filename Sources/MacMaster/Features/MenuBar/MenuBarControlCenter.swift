@@ -98,7 +98,7 @@ struct MenuBarControlCenter: View {
             HStack(spacing: 9) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(color).font(.system(size: 15))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("\(health.issues.count) issue\(health.issues.count == 1 ? "" : "s") need attention")
+                    Text("\(health.issues.count) \(health.issues.count == 1 ? "issue needs" : "issues need") attention")
                         .font(.system(size: 12, weight: .semibold))
                     Text(health.summary).font(.system(size: 10.5)).foregroundStyle(.secondary).lineLimit(2)
                         .multilineTextAlignment(.leading)

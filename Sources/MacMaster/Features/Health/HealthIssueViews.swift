@@ -45,11 +45,7 @@ struct HealthIssueCard: View {
                         .background(issue.severity.color.opacity(0.18), in: Capsule())
                         .foregroundStyle(issue.severity.color)
                     Spacer()
-                    HStack(spacing: 3) {
-                        Text("Detected")
-                        Text(issue.detectedAt, style: .relative)
-                        Text("ago")
-                    }
+                    AgoText(prefix: "Detected", date: issue.detectedAt)
                     .font(.caption).foregroundStyle(.secondary)
                 }
                 Text(issue.detail)

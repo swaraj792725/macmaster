@@ -159,8 +159,9 @@ final class DiskReader {
         if let last = lastBytes, let t = lastTime {
             let dt = now.timeIntervalSince(t)
             if dt > 0 {
-                r = Double(bytes.read &- last.read) / dt
-                w = Double(bytes.write &- last.write) / dt
+                // Counters can drop (drive ejected, driver reset): skip that tick instead of wrapping.
+                r = bytes.read >= last.read ? Double(bytes.read - last.read) / dt : 0
+                w = bytes.write >= last.write ? Double(bytes.write - last.write) / dt : 0
             }
         }
         lastBytes = bytes; lastTime = now
@@ -304,7 +305,8 @@ struct SystemInfo {
             efficiencyCores: Sysctl.int("hw.perflevel1.logicalcpu") ?? 0,
             logicalCores: ProcessInfo.processInfo.activeProcessorCount,
             memory: ProcessInfo.processInfo.physicalMemory,
-            hostName: Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+            hostName: ProcessInfo.processInfo.environment["MM_SNAPSHOT_HOSTNAME"]
+                ?? Host.current().localizedName ?? ProcessInfo.processInfo.hostName
         )
     }()
 

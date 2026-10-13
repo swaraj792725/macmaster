@@ -25,7 +25,7 @@ struct StatsMemoryCard: View {
         let mem = m.memory
         let (label, color) = StatsPressure.info(mem.pressureLevel)
         StatsCardShell(module: .memory, valueText: Fmt.percent(mem.usedFraction),
-                       caption: "\(Fmt.bytes(mem.used)) of \(Fmt.bytes(mem.total))") {
+                       caption: "\(Fmt.memory(mem.used)) of \(Fmt.memory(mem.total))") {
             HStack(spacing: 10) {
                 StatusPill(text: label, color: color)
                 StatsMiniRing(fraction: mem.usedFraction, color: Theme.Palette.memory)

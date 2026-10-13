@@ -11,7 +11,7 @@ struct HealthChecklistCard: View {
                 SectionTitle(text: "Security & maintenance", symbol: "checklist")
                 Spacer()
                 if let d = monitor.checkupDate {
-                    Text("Checked \(d, style: .relative) ago").font(.caption).foregroundStyle(.secondary)
+                    AgoText(prefix: "Checked", date: d).font(.caption).foregroundStyle(.secondary)
                 }
             }
             if monitor.checkup.isEmpty && !monitor.isCheckingUp {

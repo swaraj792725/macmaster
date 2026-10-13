@@ -39,6 +39,7 @@ enum BatteryFormat {
     }
 
     static func notChargingText(_ r: BatteryReading) -> String {
+        if let l = BatteryChargeLimitAPI.isHoldingAtLimit(r) { return "Not charging (\(l)% charge limit)" }
         if r.optimizedCharging == true { return "Not charging (Optimized Battery Charging)" }
         if let reason = r.notChargingReason, reason != 0 { return "Not charging (paused by macOS)" }
         return "Not charging"
@@ -52,6 +53,7 @@ enum BatteryFormat {
         }
         if r.isPluggedIn {
             if isFull(r) { return "Fully charged — plugged in" }
+            if let l = BatteryChargeLimitAPI.isHoldingAtLimit(r) { return "Plugged in, held at \(l)% limit" }
             return "Plugged in, " + notChargingText(r).prefix(1).lowercased() + notChargingText(r).dropFirst()
         }
         return "On battery — " + (r.timeToEmpty.map { "\(minutes($0)) left" } ?? "estimating time remaining")
@@ -61,7 +63,10 @@ enum BatteryFormat {
     static func shortStatus(_ r: BatteryReading) -> String {
         guard r.isPresent else { return "No battery" }
         if r.isCharging { return r.timeToFull.map { "Full in \(minutes($0))" } ?? "Charging" }
-        if r.isPluggedIn { return isFull(r) ? "Charged" : "Plugged in" }
+        if r.isPluggedIn {
+            if let l = BatteryChargeLimitAPI.isHoldingAtLimit(r) { return "Held at \(l)%" }
+            return isFull(r) ? "Charged" : "Plugged in"
+        }
         return r.timeToEmpty.map { "\(minutes($0)) left" } ?? "On battery"
     }
 

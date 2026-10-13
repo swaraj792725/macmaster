@@ -56,7 +56,7 @@ struct UninstallerAppsView: View {
             }
 
             HStack {
-                Text("\(model.apps.count) apps · \(Fmt.bytes(model.totalAppsSize))")
+                Text("\(Fmt.count(model.apps.count, "app")) · \(Fmt.bytes(model.totalAppsSize))")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button { model.loadApps(force: true) } label: { Image(systemName: "arrow.clockwise") }

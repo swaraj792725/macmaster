@@ -62,7 +62,7 @@ struct StatsPopoverView: View {
     private var subtitle: String {
         switch module {
         case .cpu: "\(SystemInfo.current.chip)"
-        case .memory: "\(Fmt.bytes(m.memory.used)) of \(Fmt.bytes(m.memory.total))"
+        case .memory: "\(Fmt.memory(m.memory.used)) of \(Fmt.memory(m.memory.total))"
         case .gpu: "Utilization"
         case .disk: "\(Fmt.bytes(m.disk.available)) free of \(Fmt.bytes(m.disk.total))"
         case .network: "↑ \(StatsFmt.compactRate(m.network.upRate)) · \(m.network.primaryInterface ?? "offline")"
@@ -141,10 +141,11 @@ private struct StatsBatteryPopoverBody: View {
                 BatteryHeroGlyph(percent: r.percent, isCharging: r.isCharging, isPluggedIn: r.isPluggedIn, width: 200)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
-                InfoRow(label: "Health", value: "\(Fmt.percent(r.health)) · \(r.cycleCount) cycles", symbol: "heart.fill")
-                InfoRow(label: r.batteryPowerWatts >= 0 ? "Charging at" : "Discharging at",
-                        value: BatteryFormat.watts(abs(r.batteryPowerWatts)), symbol: "bolt.fill")
+                InfoRow(label: "Health", value: "\(Fmt.percent(r.health)) · \(Fmt.count(r.cycleCount, "cycle"))", symbol: "heart.fill")
+                InfoRow(label: flowLabel(r), value: abs(r.batteryPowerWatts) < 0.2 ? "Idle" : BatteryFormat.watts(abs(r.batteryPowerWatts)),
+                        symbol: "bolt.fill")
                 InfoRow(label: "Temperature", value: r.temperature.map { Fmt.temperature($0) } ?? "—", symbol: "thermometer.medium")
+                BatteryChargeLimitControl(reading: r)
                 if !level.isEmpty {
                     BatterySegmentedChart(points: level, yDomain: 0...100, unit: "%").frame(height: 110)
                 }
@@ -155,5 +156,13 @@ private struct StatsBatteryPopoverBody: View {
         .task(id: b.history.last?.date) {
             level = BatteryChartPrep.prepare(b.history, range: .day, maxPoints: 120) { $0.percent * 100 }
         }
+    }
+
+    /// On the adapter a held battery can still trickle out a little; "Discharging" would read like a fault.
+    private func flowLabel(_ r: BatteryReading) -> String {
+        let w = r.batteryPowerWatts
+        if abs(w) < 0.2 { return "Battery" }
+        if w > 0 { return "Charging at" }
+        return r.isPluggedIn ? "Drawing from battery" : "Discharging at"
     }
 }

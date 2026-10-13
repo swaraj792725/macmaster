@@ -4,6 +4,25 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.0] - 2026-10-13
+
+### Added
+- Battery: set the charge limit (80, 85, 90, 95 or 100%) from the battery menu bar dropdown. It is macOS's own charge limit, so it keeps working when MacMaster is closed. The same control is on the Battery page (now near the top) and in Power settings.
+
+### Changed
+- While the battery is held at the charge limit, MacMaster says so ("Not charging (80% charge limit)", "Held at 80%") instead of "paused by macOS".
+- The battery dropdown says "Drawing from battery" instead of "Discharging" when the Mac is on the charger, and "Idle" when no power flows.
+- "Checked 5 min ago" style times now update on their own.
+
+### Fixed
+- Installed memory showed as "17.18 GB" on a 16 GB Mac. Memory is now shown the way About This Mac shows it.
+- Cleaner: items in a location that can't be removed were counted as freed space. They are now listed as failures.
+- Uninstaller: files that were already gone were counted as removed and added to the space freed.
+- Processes: the first refresh no longer lists every process at 0% in random order.
+- Disk activity no longer shows a huge spike when a drive's counters reset.
+- Toolbox: a card's arrow no longer stays visible after you leave the page.
+- "1 cycles", "1 days" and similar counts now read correctly.
+
 ## [0.3.0] - 2026-10-13
 
 ### Fixed

@@ -166,7 +166,10 @@ struct PowerSettingsTab: View {
             }
         }()
         return GroupedSection("Battery charge limit", symbol: "battery.100.bolt",
-                              footer: "On Apple silicon the charge limit is enforced by the system's battery management. Setting a custom limit needs a privileged background helper, which MacMaster doesn't install. Optimized Battery Charging is the built-in way to reduce battery aging.") {
+                              footer: "This is macOS's own charge limit, the same one as System Settings → Battery. macOS allows 80–100%; 100% charges to full.") {
+            if r.isPresent {
+                BatteryChargeLimitControl(reading: r, showsHeader: false)
+            }
             SettingsRow(title: "Optimized Battery Charging",
                         subtitle: "Learns your routine and holds the battery at 80% until you need it.",
                         symbol: "bolt.badge.clock.fill", colors: Theme.Palette.green) {
