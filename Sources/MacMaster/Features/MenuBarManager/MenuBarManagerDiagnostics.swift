@@ -17,7 +17,10 @@ enum MenuBarManagerDiagnostics {
                 log += dump("initial", m); shot(dir, "initial")
                 m.openDropdown()
                 try? await Task.sleep(for: .seconds(2))
-                log += "dropdown visible=\(m.dropdown.isVisible) frame=\(m.dropdown.frame.map { "\($0)" } ?? "nil")\n"
+                log += "dropdown visible=\(m.dropdown.isVisible) frame=\(m.dropdown.frame.map { "\($0)" } ?? "nil") \(m.dropdown.sizeDebug)\n"
+                if let f = m.dropdown.frame, let h = NSScreen.screens.first?.frame.height {
+                    shot(dir, "dropdown", rect: "\(Int(f.minX)),\(Int(h - f.maxY)),\(Int(f.width)),\(Int(f.height))")
+                }
                 m.dropdown.hide()
             } else {
                 m.clearHidingUnsupported()
@@ -45,11 +48,11 @@ enum MenuBarManagerDiagnostics {
         }
     }
 
-    private static func shot(_ dir: String, _ name: String) {
+    private static func shot(_ dir: String, _ name: String, rect: String? = nil) {
         let w = Int(NSScreen.screens.first?.frame.width ?? 1512)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        p.arguments = ["-x", "-R0,0,\(w),40", "\(dir)/bar-\(name).png"]
+        p.arguments = ["-x", "-R\(rect ?? "0,0,\(w),40")", "\(dir)/bar-\(name).png"]
         try? p.run(); p.waitUntilExit()
     }
 

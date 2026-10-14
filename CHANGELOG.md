@@ -4,6 +4,11 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.3] - 2026-10-14
+
+### Fixed
+- The « menu bar dropdown opened as a small empty strip with cut-off text instead of showing the hidden icons. It now sizes itself to its contents again. The menu bar tray had the same problem and is fixed too.
+
 ## [0.4.2] - 2026-10-14
 
 ### Fixed

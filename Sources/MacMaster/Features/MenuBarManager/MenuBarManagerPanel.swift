@@ -20,11 +20,6 @@ final class MenuBarManagerPanelModel {
     var isEmpty: Bool { hidden.isEmpty && alwaysHidden.isEmpty }
 }
 
-private struct MenuBarManagerSizeKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
-}
-
 // MARK: - Views
 
 /// One icon in the dropdown bar: captured image when available, app icon + name otherwise.
@@ -133,10 +128,7 @@ struct MenuBarManagerPanelView: View {
         .fixedSize()
         .modifier(MenuBarManagerGlassModifier(radius: 16))
         .shadow(color: .black.opacity(0.22), radius: 12, y: 4)
-        .background(GeometryReader { g in
-            Color.clear.preference(key: MenuBarManagerSizeKey.self, value: g.size)
-        })
-        .onPreferenceChange(MenuBarManagerSizeKey.self) { onSize($0) }
+        .onGeometryChange(for: CGSize.self, of: { $0.size }) { onSize($0) }
         .padding(10) // room for the window shadow
         .scaleEffect(model.appeared ? 1 : 0.9, anchor: .top)
         .opacity(model.appeared ? 1 : 0)
@@ -247,7 +239,7 @@ final class MenuBarManagerPanelController {
             self?.resize(CGSize(width: size.width + 20, height: size.height + 20))
         }
         let h = NSHostingView(rootView: view)
-        h.sizingOptions = []
+        h.sizingOptions = [.intrinsicContentSize]
         p.contentView = h
         panel = p
         host = h

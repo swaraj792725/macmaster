@@ -28,11 +28,6 @@ final class MenuBarManagerDropdownModel {
     var ghostOverBar = false
 }
 
-private struct MenuBarManagerDropdownSizeKey: PreferenceKey {
-    static let defaultValue: CGSize = .zero
-    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
-}
-
 /// The flyout under the menu bar: only the hidden items, in a menu-material strip. Works over full-screen apps and
 /// every Space; closes on an outside click, Escape, a Space change or another app coming forward.
 @MainActor
@@ -48,10 +43,13 @@ final class MenuBarManagerDropdownController {
     private var observers: [NSObjectProtocol] = []
     private var ghost: NSPanel?
     private var anchorX: CGFloat = 0
+    /// Last size SwiftUI reported, incl. the shadow margin.
+    private var measured: CGSize?
     private var screen: NSScreen?
     private var hideTask: Task<Void, Never>?
     private(set) var isVisible = false
     var frame: NSRect? { isVisible ? panel?.frame : nil }
+    var sizeDebug: String { "measured=\(measured.map { "\($0)" } ?? "nil") fitting=\(host.map { "\($0.fittingSize)" } ?? "nil") hostFrame=\(host.map { "\($0.frame)" } ?? "nil")" }
     /// Clicks in this window (our toggle) don't dismiss; the toggle's own action handles them.
     weak var ignoredWindow: NSWindow?
     var onSettings: (() -> Void)? {
@@ -72,7 +70,11 @@ final class MenuBarManagerDropdownController {
         host.layoutSubtreeIfNeeded()
         let fit = host.fittingSize
         // Always place before showing; an unmeasured panel would sit at the screen origin.
-        resize(fit.width > 20 && fit.height > 20 ? fit : CGSize(width: 180, height: 60), force: true)
+        resize(measured ?? (fit.width > 20 && fit.height > 20 ? fit : CGSize(width: 180, height: 60)), force: true)
+        // Layout may settle after this pass (e.g. the list's measured height); take the final size then.
+        DispatchQueue.main.async { [weak self] in
+            if let self, let m = self.measured { self.resize(m) }
+        }
         if !isVisible {
             model.appeared = false
             panel.orderFrontRegardless()
@@ -112,10 +114,13 @@ final class MenuBarManagerDropdownController {
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         p.onEscape = { [weak self] in self?.hide() }
         let view = MenuBarManagerDropdownView(model: model, manager: MenuBarManager.shared) { [weak self] size in
-            self?.resize(CGSize(width: size.width + 20, height: size.height + 20))
+            let s = CGSize(width: ceil(size.width) + 20, height: ceil(size.height) + 20)
+            self?.measured = s
+            self?.resize(s)
         }
         let h = NSHostingView(rootView: view)
-        h.sizingOptions = []
+        // Intrinsic size only, so `fittingSize` measures the content; no window min/max constraints.
+        h.sizingOptions = [.intrinsicContentSize]
         p.contentView = h
         panel = p
         host = h
@@ -462,10 +467,8 @@ struct MenuBarManagerDropdownView: View {
                 model.onSettings?()
             }
         }
-        .background(GeometryReader { g in
-            Color.clear.preference(key: MenuBarManagerDropdownSizeKey.self, value: g.size)
-        })
-        .onPreferenceChange(MenuBarManagerDropdownSizeKey.self) { onSize($0) }
+        // Not a size PreferenceKey: newer SwiftUI reduces the content's default .zero after the background's value.
+        .onGeometryChange(for: CGSize.self, of: { $0.size }) { onSize($0) }
         .padding(10) // room for the window shadow
         .scaleEffect(model.appeared ? 1 : 0.94, anchor: .top)
         .opacity(model.appeared ? 1 : 0)
