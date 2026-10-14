@@ -16,12 +16,6 @@ enum TilingAX {
         "com.apple.notificationcenterui", "com.apple.systemuiserver", "com.apple.loginwindow",
     ]
 
-    private static let systemWide: AXUIElement = {
-        let el = AXUIElementCreateSystemWide()
-        AXUIElementSetMessagingTimeout(el, 0.25)
-        return el
-    }()
-
     static var ownPID: pid_t { ProcessInfo.processInfo.processIdentifier }
 
     // MARK: Attributes
@@ -123,10 +117,7 @@ enum TilingAX {
 
     /// Nil over MacMaster's own windows: hit-testing ourselves runs SwiftUI accessibility (see `SelfAX`).
     static func elementAt(_ p: CGPoint) -> AXUIElement? {
-        guard !SelfAX.ownsWindow(at: p) else { return nil }
-        var el: AXUIElement?
-        let r = AXUIElementCopyElementAtPosition(systemWide, Float(p.x), Float(p.y), &el)
-        return r == .success ? el : nil
+        SelfAX.element(at: p, timeout: 0.25)
     }
 
     /// Standard window under a point (AX coords), skipping MacMaster, Dock, desktop and full-screen windows.

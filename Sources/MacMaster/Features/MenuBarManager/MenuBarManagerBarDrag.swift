@@ -63,10 +63,7 @@ final class MenuBarManagerBarDragWatcher {
         if SelfAX.ownsWindow(at: cg) {
             return movable.filter { $0.pid == SelfAX.pid }.min { abs($0.frame.midX - cg.x) < abs($1.frame.midX - cg.x) }
         }
-        guard Permissions.isGranted(.accessibility) else { return nil }
-        var el: AXUIElement?
-        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.1)
-        guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(cg.x), Float(cg.y), &el) == .success, let el else { return nil }
+        guard Permissions.isGranted(.accessibility), let el = SelfAX.element(at: cg, timeout: 0.1) else { return nil }
         var pid: pid_t = 0
         guard AXUIElementGetPid(el, &pid) == .success else { return nil }
         return movable.filter { $0.pid == pid }.min { abs($0.frame.midX - cg.x) < abs($1.frame.midX - cg.x) }

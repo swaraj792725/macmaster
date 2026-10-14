@@ -32,8 +32,12 @@ for arg in "$@"; do
     --install)
       pkill -x MacMaster 2>/dev/null || true
       rm -rf /Applications/MacMaster.app
-      cp -R "$APP" /Applications/
+      # Move, not copy: a second MacMaster.app in ./build shows up twice in Spotlight, Launchpad and "Open With".
+      LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+      "$LSREG" -u "$PWD/$APP" 2>/dev/null || true
+      mv "$APP" /Applications/
       APP=/Applications/MacMaster.app
+      "$LSREG" -f "$APP" 2>/dev/null || true
       echo "Installed to $APP" ;;
     --run)
       pkill -x MacMaster 2>/dev/null || true

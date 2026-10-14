@@ -4,6 +4,12 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.2] - 2026-10-14
+
+### Fixed
+- MacMaster could crash while "focus follows mouse" was on and the pointer passed over one of its own windows. Window tiling and menu bar icon dragging now ask only the app under the pointer, never MacMaster itself.
+- Building and installing no longer leaves a second copy of MacMaster that shows up twice in Spotlight and Launchpad.
+
 ## [0.4.1] - 2026-10-13
 
 ### Fixed
