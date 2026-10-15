@@ -114,7 +114,7 @@ struct OnboardingPermissionsStep: View {
                 .contentTransition(.numericText())
             VStack(spacing: 8) {
                 ForEach(Permission.allCases) { p in
-                    PermissionsRow(permission: p, granted: model.isGranted(p), compact: true) { model.request(p) }
+                    PermissionsRow(permission: p, granted: model.isGranted(p), compact: true, note: model.note(for: p)) { model.request(p) }
                         .padding(.horizontal, 12).padding(.vertical, 9)
                         .card(padding: 0, kind: .glass, radius: Theme.Radius.medium)
                 }

@@ -1,52 +1,45 @@
 import SwiftUI
 import AppKit
 
-/// Live permission status. Polls only between `start()` and `stop()` (page visible) and only
-/// while the app is active; also refreshes when the app becomes active.
+/// Live permission status for the Permissions page and onboarding, read from `PermissionWatcher`.
+/// Between `start()` and `stop()` (page visible) the watcher checks every few seconds, also while
+/// MacMaster is in the background and the user is in System Settings.
 @MainActor @Observable
 final class PermissionsModel {
-    private(set) var status: [Permission: Bool] = [:]
     private(set) var checking = false
-    @ObservationIgnored private var poll: Task<Void, Never>?
-    @ObservationIgnored private var observer: NSObjectProtocol?
+    @ObservationIgnored private var started = false
+    private var watcher: PermissionWatcher { .shared }
 
-    init() {
-        for p in Permission.allCases { status[p] = Permissions.isGranted(p) }
+    var status: [Permission: Bool] { watcher.status }
+    var grantedCount: Int { Permission.allCases.filter(isGranted).count }
+    var total: Int { Permission.allCases.count }
+    func isGranted(_ p: Permission) -> Bool { watcher.isGranted(p) }
+    var menuBarAllowed: Bool? { watcher.menuBarAllowed }
+
+    /// Extra line under a permission when something is off beyond granted / missing.
+    func note(for p: Permission) -> String? {
+        switch p {
+        case .accessibility where watcher.accessibilityBroken:
+            "Switched on in System Settings, but macOS still blocks MacMaster (usually left over from an older version). Press Fix, then switch MacMaster on again in the list."
+        case .screenRecording where watcher.screenRecordingNeedsRelaunch:
+            "Granted. Quit MacMaster completely (⌥⌘Q) and open it again so every preview can use it."
+        default: nil
+        }
     }
 
-    var grantedCount: Int { status.values.filter { $0 }.count }
-    var total: Int { Permission.allCases.count }
-    func isGranted(_ p: Permission) -> Bool { status[p] ?? false }
-
     func start() {
-        guard poll == nil else { return }
-        observer = NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification,
-                                                          object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in await self?.refresh() }
-        }
-        poll = Task { [weak self] in
-            await self?.refresh()
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                if Task.isCancelled { break }
-                if NSApp.isActive { await self?.refresh() }
-            }
-        }
+        guard !started else { return }
+        started = true
+        watcher.beginFastPolling()
     }
 
     func stop() {
-        poll?.cancel(); poll = nil
-        if let observer { NotificationCenter.default.removeObserver(observer) }
-        observer = nil
+        guard started else { return }
+        started = false
+        watcher.endFastPolling()
     }
 
-    func refresh() async {
-        await Permissions.refreshNotificationStatus()
-        let result = await Task.detached(priority: .utility) {
-            Dictionary(uniqueKeysWithValues: Permission.allCases.map { ($0, Permissions.isGranted($0)) })
-        }.value
-        if result != status { withAnimation(.smooth(duration: 0.25)) { status = result } }
-    }
+    func refresh() async { await watcher.refresh() }
 
     /// User-pressed Re-check: shows a brief spinner.
     func recheck() {
@@ -59,7 +52,8 @@ final class PermissionsModel {
     }
 
     func request(_ p: Permission) {
-        Permissions.request(p)
+        if p == .accessibility, watcher.accessibilityBroken { Permissions.repairAccessibility() }
+        else { Permissions.request(p) }
         // The user answers in a system dialog / System Settings; look again shortly.
         Task {
             for delay in [0.6, 1.5, 3.0] {
@@ -68,4 +62,6 @@ final class PermissionsModel {
             }
         }
     }
+
+    func openMenuBarSettings() { watcher.openMenuBarSettings() }
 }

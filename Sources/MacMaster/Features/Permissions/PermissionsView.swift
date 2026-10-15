@@ -29,9 +29,11 @@ struct PermissionsView: View {
 
             summary
 
+            menuBarRow.card().searchAnchor("perm.menuBar")
+
             VStack(spacing: Theme.spacing) {
                 ForEach(Permission.allCases) { p in
-                    PermissionsRow(permission: p, granted: model.isGranted(p)) { model.request(p) }
+                    PermissionsRow(permission: p, granted: model.isGranted(p), note: model.note(for: p)) { model.request(p) }
                         .card()
                         .searchAnchor("perm.\(p.rawValue)")
                 }
@@ -45,6 +47,34 @@ struct PermissionsView: View {
         }
         .onAppear { model.start() }
         .onDisappear { model.stop() }
+    }
+
+    /// Not a privacy permission, but just as needed: macOS can keep every MacMaster icon out of the menu bar.
+    private var menuBarRow: some View {
+        let allowed = model.menuBarAllowed
+        let ok = allowed != false
+        return HStack(alignment: .top, spacing: 14) {
+            IconTile(symbol: SymbolKit.firstAvailable(["menubar.rectangle", "menubar.arrow.up.rectangle"]),
+                     colors: allowed == true ? Theme.Palette.green : Theme.Palette.indigo, size: 44)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("Menu Bar").font(.system(size: 16, weight: .semibold))
+                    StatusPill(text: allowed == nil ? "Checking" : ok ? "Allowed" : "Hidden by macOS",
+                               color: allowed == nil ? Color.secondary : ok ? Color(hex: 0x30D158) : Color(hex: 0xFF453A))
+                }
+                Text(ok ? "macOS lets MacMaster's icons into the menu bar (System Settings › Menu Bar › Allow in the Menu Bar)."
+                     : "MacMaster is switched off in System Settings › Menu Bar › Allow in the Menu Bar, so none of its menu bar icons show. Turn MacMaster on there.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            if ok {
+                Button("Open Settings", action: model.openMenuBarSettings).buttonStyle(.mmSecondary)
+            } else {
+                Button("Fix", action: model.openMenuBarSettings).buttonStyle(.mmPrimary)
+            }
+        }
     }
 
     private var summary: some View {

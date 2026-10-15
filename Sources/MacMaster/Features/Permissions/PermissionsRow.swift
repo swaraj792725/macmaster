@@ -45,6 +45,7 @@ struct PermissionsRow: View {
     let permission: Permission
     let granted: Bool
     var compact = false
+    var note: String? = nil
     let onRequest: () -> Void
 
     var body: some View {
@@ -79,6 +80,12 @@ struct PermissionsRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(compact ? 2 : nil)
                     .fixedSize(horizontal: false, vertical: true)
+                if let note {
+                    Label(note, systemImage: "exclamationmark.triangle.fill")
+                        .font(compact ? .caption : .callout)
+                        .foregroundStyle(Color(hex: 0xFF9F0A))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !compact {
                     PermissionsFlowLayout(spacing: 6) {
                         ForEach(permission.features, id: \.self) { PermissionsChip(text: $0) }
@@ -100,7 +107,7 @@ struct PermissionsRow: View {
         } else {
             VStack(alignment: .trailing, spacing: 6) {
                 if compact { StatusPill(text: "Missing", color: Color(hex: 0xFF9F0A)) }
-                Button(permission.actionTitle, action: onRequest)
+                Button(note != nil && permission == .accessibility ? "Fix" : permission.actionTitle, action: onRequest)
                     .buttonStyle(.mmPrimary)
             }
         }

@@ -4,6 +4,19 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.5] - 2026-10-16
+
+### Added
+- MacMaster now notices when macOS keeps its icons out of the menu bar (System Settings › Menu Bar › Allow in the Menu Bar switched off). It warns you once, with a button that opens that setting, and the Permissions page shows a Menu Bar row with the same fix.
+
+### Changed
+- Permissions are checked in the background, also while you are in System Settings, and again after wake and display changes, so a permission you grant or revoke shows up within seconds.
+- Accessibility that is switched on but doesn't actually work (left over from an older version) is now shown as a problem, with a Fix button that clears the old entry.
+- A Screen Recording grant is noticed right away, without reopening MacMaster.
+
+### Fixed
+- Clicking Apple's Control Center or clock in a full-screen app again opens MacMaster's dropdown and Clock. They opened out of sight while MacMaster was open in the Dock.
+
 ## [0.4.4] - 2026-10-15
 
 ### Changed

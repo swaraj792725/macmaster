@@ -112,7 +112,7 @@ enum Permissions {
     static func isGranted(_ p: Permission) -> Bool {
         switch p {
         case .accessibility: return AXIsProcessTrusted()
-        case .screenRecording: return CGPreflightScreenCaptureAccess()
+        case .screenRecording: return CGPreflightScreenCaptureAccess() || screenRecordingLive
         case .fullDiskAccess: return hasFullDiskAccess
         case .notifications: return notificationState.granted
         case .location: return locationGranted
@@ -139,6 +139,14 @@ enum Permissions {
         case .notifications, .location, .calendars:
             break
         }
+    }
+
+    /// Accessibility is on in System Settings but doesn't work for this build: drop the stale entry and ask again.
+    static func repairAccessibility() {
+        resetStaleEntry(.accessibility)
+        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+        NSWorkspace.shared.open(Permission.accessibility.settingsURL)
     }
 
     /// A grant made for an older build (different signature) still shows "on" in System Settings
@@ -175,6 +183,55 @@ enum Permissions {
         }
         // No probe exists — check Containers listing as a weaker signal.
         return (try? FileManager.default.contentsOfDirectory(atPath: home.appendingPathComponent("Library/Containers/com.apple.Safari").path)) != nil
+    }
+
+    // MARK: Live checks
+
+    /// AXIsProcessTrusted only reads MacMaster's own entry. This asks the Dock for its role, which fails with
+    /// `.apiDisabled` when Accessibility doesn't really work for this build (a stale entry from an older one).
+    /// Nil when it can't tell. Never asks MacMaster itself (see `SelfAX`). Blocking, at most 0.5s.
+    static func accessibilityWorks() -> Bool? {
+        guard let dock = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.dock").first
+        else { return nil }
+        let el = AXUIElementCreateApplication(dock.processIdentifier)
+        AXUIElementSetMessagingTimeout(el, 0.5)
+        var v: CFTypeRef?
+        switch AXUIElementCopyAttributeValue(el, kAXRoleAttribute as CFString, &v) {
+        case .success: return true
+        case .apiDisabled: return false
+        default: return nil
+        }
+    }
+
+    /// CGPreflightScreenCaptureAccess keeps its first answer for the life of the process, so a grant made while
+    /// MacMaster runs would only show after a relaunch. Other apps' window titles are readable only with Screen
+    /// Recording, and that is checked live. False when no other app has a titled window on screen.
+    /// Cached for 3s: callers ask on hot paths.
+    static var screenRecordingLive: Bool {
+        let now = ProcessInfo.processInfo.systemUptime
+        if let c = screenLiveLock.withLock({ _screenLive }), now - c.at < 3 { return c.value }
+        let value = otherAppWindowTitlesVisible()
+        screenLiveLock.withLock { _screenLive = (value, now) }
+        return value
+    }
+
+    /// Granted for this run only after a relaunch: titles are readable, but the cached system answer is still no.
+    static var screenRecordingNeedsRelaunch: Bool { !CGPreflightScreenCaptureAccess() && screenRecordingLive }
+
+    private static let screenLiveLock = NSLock()
+    nonisolated(unsafe) private static var _screenLive: (value: Bool, at: TimeInterval)?
+
+    private static func otherAppWindowTitlesVisible() -> Bool {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]] else { return false }
+        let me = SelfAX.pid
+        let system: Set<String> = ["Window Server", "Dock", "Control Center", "SystemUIServer", "MenuBarAgent"]
+        return list.contains { w in
+            guard let owner = w[kCGWindowOwnerPID as String] as? pid_t, owner != me,
+                  (w[kCGWindowLayer as String] as? Int) == 0,
+                  !system.contains(w[kCGWindowOwnerName as String] as? String ?? "") else { return false }
+            return !(w[kCGWindowName as String] as? String ?? "").isEmpty
+        }
     }
 
     // MARK: Notifications

@@ -222,6 +222,7 @@ enum AppSearchIndex {
     // MARK: Setup
 
     private static let setup: [SearchEntry] = [
+        SearchEntry(.permissions, crumb: "Menu Bar", "Allow in the Menu Bar", "menu bar icons hidden missing status items", anchor: "perm.menuBar"),
         SearchEntry(.permissions, crumb: "Accessibility", "Accessibility permission", "event tap windows keyboard mouse", anchor: "perm.accessibility"),
         SearchEntry(.permissions, crumb: "Screen Recording", "Screen Recording permission", "thumbnails previews capture", anchor: "perm.screenRecording"),
         SearchEntry(.permissions, crumb: "Full Disk Access", "Full Disk Access permission", "protected folders mail safari", anchor: "perm.fullDiskAccess"),

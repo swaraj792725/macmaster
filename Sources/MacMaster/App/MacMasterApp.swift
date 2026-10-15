@@ -128,6 +128,7 @@ enum Services {
         PowerScheduler.shared.start()
         KeyboardEngine.shared.start()
         UpdateChecker.shared.start()
+        PermissionWatcher.shared.start()
         WhatsNewWindow.showIfUpdated()
     }
 }

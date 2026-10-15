@@ -390,13 +390,13 @@ final class AppleItemRedirect {
             if ClockMenuBar.shared.isPopoverShown { ClockMenuBar.shared.close(); return }
             if justClosed { return }
             ClockMenuBar.shared.showPopover(from: anchorView(for: rect))
-            redirectLog.info("opened clock popover under \(AppleMenuScanner.describe(rect), privacy: .public)")
+            redirectLog.info("opened clock popover under \(AppleMenuScanner.describe(rect), privacy: .public), \(self.spaceState, privacy: .public)")
         }
     }
 
     private func open(controlCenterAt rect: CGRect) {
         MainStatusItem.shared.present(from: anchorView(for: rect))
-        redirectLog.info("opened dropdown under \(AppleMenuScanner.describe(rect), privacy: .public), shown=\(MainStatusItem.shared.isShown, privacy: .public)")
+        redirectLog.info("opened dropdown under \(AppleMenuScanner.describe(rect), privacy: .public), shown=\(MainStatusItem.shared.isShown, privacy: .public), \(self.spaceState, privacy: .public)")
     }
 
     /// Settings page "Test": open the dropdown under Apple's icon exactly like a redirected click would.
@@ -435,7 +435,11 @@ final class AppleItemRedirect {
             bottom = max(bottom, (primary - s.frame.maxY) + (s.frame.maxY - s.visibleFrame.maxY))
         }
         let frame = NSRect(x: rect.minX, y: primary - bottom, width: max(rect.width, 1), height: bottom)
-        let w: NSWindow = anchor ?? { () -> NSWindow in
+        // A fresh panel per open: a reused one could stay tied to the Space it was first shown on, so over a
+        // full-screen app the dropdown opened out of sight.
+        if let old = anchor { old.orderOut(nil); old.close() }
+        anchor = nil
+        let w: NSWindow = { () -> NSWindow in
             // A non-activating panel: while MacMaster is a regular (Dock) app, a plain window can't join another
             // app's full-screen Space, so the popover hung from it opened on the desktop Space, out of sight.
             let w = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
@@ -459,6 +463,13 @@ final class AppleItemRedirect {
         w.orderFrontRegardless()
         redirectLog.debug("anchor window frame (AppKit) \(NSStringFromRect(frame), privacy: .public)")
         return w.contentView!
+    }
+
+    /// For the log: whether the anchor and the popover hung from it are on the Space the user is looking at.
+    private var spaceState: String {
+        guard let a = anchor else { return "no anchor" }
+        let kids = (a.childWindows ?? []).map { "\($0.isOnActiveSpace)" }.joined(separator: ",")
+        return "anchor onSpace=\(a.isOnActiveSpace) popover onSpace=[\(kids)] active=\(NSApp.isActive)"
     }
 
     private func hideAnchor() { anchor?.orderOut(nil) }
