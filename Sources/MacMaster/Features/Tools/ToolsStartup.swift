@@ -298,12 +298,18 @@ final class ToolsStartupModel {
                 if let plist = item.plistURL {
                     let dom = domain(for: item)
                     let trash = AppPaths.home.appendingPathComponent(".Trash").path
-                    let dest = "\(trash)/\(plist.lastPathComponent)"
+                    // Unique name so an existing Trash entry can't turn the move into a silent no-op.
+                    let stem = plist.deletingPathExtension().lastPathComponent
+                    let dest = "\(trash)/\(stem)-\(UUID().uuidString.prefix(8)).\(plist.pathExtension)"
                     let r = await ToolsAdmin.runScript([
                         "/bin/launchctl bootout \(Shell.quote(dom + "/" + item.label)) || true",
                         "/bin/mv -n \(Shell.quote(plist.path)) \(Shell.quote(dest))",
+                        "/usr/sbin/chown \(getuid()) \(Shell.quote(dest)) || true",
+                        // Last command decides the status: succeed only if the plist is really gone.
+                        "test ! -e \(Shell.quote(plist.path))",
                     ], prompt: "MacMaster needs administrator access to remove \(item.name).")
-                    ok = r.status == 0; err = ToolsAdmin.isCancelled(r) ? "Cancelled" : r.stderr
+                    ok = r.status == 0 && !FileManager.default.fileExists(atPath: plist.path)
+                    err = ToolsAdmin.isCancelled(r) ? "Cancelled" : (r.stderr.isEmpty ? "The file is still in place" : r.stderr)
                 }
             case .loginItem:
                 if item.removableLoginItem {

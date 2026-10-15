@@ -19,7 +19,8 @@ final class MainStatusItem: NSObject, NSPopoverDelegate {
     var isShown: Bool { popover.isShown }
 
     func update() {
-        let show = UserDefaults.standard.object(forKey: "mm.app.showMenuBarIcon") as? Bool ?? true
+        let show = (UserDefaults.standard.object(forKey: "mm.app.showMenuBarIcon") as? Bool ?? true)
+            && !AppleItemRedirect.shared.replacesControlCenterIcon
         if show, item == nil {
             let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             if let button = it.button { MenuBarIconUpdater.shared.attach(to: button, statusItem: it) }
@@ -67,6 +68,7 @@ final class MainStatusItem: NSObject, NSPopoverDelegate {
 enum MainWindow {
     static func show(section: AppSection? = nil) {
         FrontAppTracker.markDeliberate()
+        restoreDockPolicy()
         NSApp.activate(ignoringOtherApps: true)
         if let w = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" || $0.title == "MacMaster" }) {
             w.makeKeyAndOrderFront(nil)
@@ -74,6 +76,20 @@ enum MainWindow {
             NotificationCenter.default.post(name: .openMainWindow, object: nil)
         }
         if let section { NotificationCenter.default.post(name: .openSection, object: section.rawValue) }
+    }
+
+    /// ⌘Q: close every app window and leave the Dock and ⌘Tab, but keep running in the menu bar.
+    static func sendToBackground() {
+        for w in NSApp.windows where w.isVisible && w.styleMask.contains(.titled) && !(w is NSPanel) { w.close() }
+        NSApp.setActivationPolicy(.accessory)
+        NSApp.hide(nil)
+    }
+
+    /// Bring the Dock icon back (unless the user hid it for good) when a window opens again.
+    static func restoreDockPolicy() {
+        guard NSApp.activationPolicy() != .regular,
+              !UserDefaults.standard.bool(forKey: "mm.app.hideDockIcon") else { return }
+        NSApp.setActivationPolicy(.regular)
     }
 }
 

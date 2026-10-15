@@ -78,6 +78,13 @@ extension MenuBarManager {
             || identifier.hasPrefix("com.apple.menuextra.controlcenter") || identifier.hasPrefix("com.apple.menuextra.clock")
     }
 
+    /// Apple's Control Center or Clock, whose click MacMaster can redirect; nil for every other item.
+    static func appleTarget(name: String, identifier: String) -> AppleItemRedirect.Target? {
+        if name == "Control Center" || identifier.hasPrefix("com.apple.menuextra.controlcenter") { return .controlCenter }
+        if name == "Clock" || identifier.hasPrefix("com.apple.menuextra.clock") { return .clock }
+        return nil
+    }
+
     var dropdownOverflowCount: Int { zoneTiles()[.overflow]?.count ?? 0 }
 
     // MARK: Tiles

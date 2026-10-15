@@ -46,6 +46,8 @@ final class SystemMonitor {
     @ObservationIgnored private let queue = DispatchQueue(label: "macmaster.monitor", qos: .utility)
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var tick = 0
+    /// A read still running (slow sensor, stalled sysctl): skip ticks instead of queueing more behind it.
+    @ObservationIgnored private var sampling = false
 
     private init() {}
 
@@ -77,6 +79,8 @@ final class SystemMonitor {
     private var backgroundProcessDemand = 0
 
     private func sample() {
+        guard !sampling else { return }
+        sampling = true
         tick += 1
         let wantProcs = processDemand > 0 || (backgroundProcessDemand > 0 && tick % 5 == 0)
         // Sensors are the most expensive read: every other tick while a window is up, every ~30 s otherwise.
@@ -90,6 +94,7 @@ final class SystemMonitor {
             let th = wantThermal ? ThermalReader.shared.read() : nil
             let p = wantProcs ? procReader.read() : nil
             DispatchQueue.main.async {
+                self.sampling = false
                 self.apply(cpu: c, mem: m, disk: d, net: n, gpu: g, thermal: th, procs: p)
             }
         }
@@ -117,7 +122,7 @@ final class SystemMonitor {
 }
 
 /// Battery history point, persisted.
-struct BatteryPoint: Codable, Identifiable {
+struct BatteryPoint: Codable, Identifiable, Sendable {
     let date: Date
     let percent: Double
     let isCharging: Bool
@@ -129,6 +134,7 @@ struct BatteryPoint: Codable, Identifiable {
 @Observable
 @MainActor
 final class BatteryMonitor {
+    private nonisolated static let saveQueue = DispatchQueue(label: "macmaster.battery.save", qos: .utility)
     static let shared = BatteryMonitor()
 
     private(set) var reading = BatteryReader.read()
@@ -170,6 +176,8 @@ final class BatteryMonitor {
                                     watts: reading.batteryPowerWatts, temperature: reading.temperature))
         let cutoff = Date().addingTimeInterval(-7 * 86_400)
         history.removeAll { $0.date < cutoff }
-        Store.save(history, to: "battery-history.json")
+        // Encoding a week of points and writing it is file IO: keep it off the main thread (serial, so writes stay in order).
+        let snapshot = history
+        Self.saveQueue.async { Store.save(snapshot, to: "battery-history.json") }
     }
 }

@@ -260,6 +260,10 @@ final class WindowPreviewWindowCache {
         windows = wins
         hasData = true
         lastRefresh = Date()
+        // AX frames are the windows' real sizes (CG/SCK report the shrunk strip size for Stage Manager strip windows).
+        var sizes: [UInt32: CGSize] = [:]
+        for w in wins where w.ax != nil && w.id & 0x8000_0000 == 0 && !w.isMinimized { sizes[w.id] = w.frame.size }
+        if !sizes.isEmpty { Task { await WindowPreviewThumbnailer.shared.noteRealSizes(sizes) } }
         return wins
     }
 
@@ -350,8 +354,17 @@ final class WindowPreviewWindowCache {
             let limit: TimeInterval = force.contains(w.pid) ? 2 : 90
             if age > limit { todo.append((w.id, limit)) }
         }
+        // Windows of other stages / Spaces that have no picture at all yet: grab one while they're still
+        // capturable, so the switcher has something real to show (they never get re-captured otherwise).
+        var offScreen = 0
+        for w in windows.sorted(by: { rec.score($0) > rec.score($1) })
+        where !w.isOnScreen && !w.isMinimized && w.id & 0x8000_0000 == 0 {
+            guard offScreen < 3 else { break }
+            if await thumbs.hasImage(w.id) { continue }
+            todo.append((w.id, .infinity)); offScreen += 1
+        }
         guard !todo.isEmpty else { return }
-        todo = Array(todo.prefix(6))
+        todo = Array(todo.prefix(9))
         await withTaskGroup(of: Void.self) { group in
             var it = todo.makeIterator()
             var running = 0

@@ -13,6 +13,7 @@ final class StatsMenuBarController: NSObject, NSPopoverDelegate {
     private var timerInterval: TimeInterval = 0
     private var defaultsObserver: NSObjectProtocol?
     private var running = false
+    private var defaultsTickPending = false
 
     private var popover: NSPopover?
     private var popoverModule: StatsModule?
@@ -33,7 +34,8 @@ final class StatsMenuBarController: NSObject, NSPopoverDelegate {
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: nil) { [weak self] _ in
             // Never block the posting thread: a background defaults write would otherwise wait on main (deadlock).
-            Task { @MainActor in self?.tick() }
+            // Coalesced: every defaults write in the app posts this, and bursts would each run a full tick.
+            Task { @MainActor in self?.scheduleDefaultsTick() }
         }
         tick()
     }
@@ -50,6 +52,18 @@ final class StatsMenuBarController: NSObject, NSPopoverDelegate {
     }
 
     // MARK: updating
+
+    private func scheduleDefaultsTick() {
+        guard running, !defaultsTickPending else { return }
+        defaultsTickPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.defaultsTickPending = false
+                if self.running { self.tick() }
+            }
+        }
+    }
 
     private func scheduleTimerIfNeeded() {
         let interval = max(0.5, SystemMonitor.shared.interval)

@@ -27,7 +27,7 @@ struct ControlCenterView: View {
 
     private var redirectSection: some View {
         GroupedSection("Apple's icons (optional)", symbol: "cursorarrow.click.2",
-                       footer: "Apple's icon stays in the menu bar; with a switch on, clicking it opens MacMaster instead. Hold Shift, Option, Command or Control while clicking to reach Apple's original.") {
+                       footer: "Apple's icon stays in the menu bar; with a switch on, clicking it opens MacMaster instead, and MacMaster's own matching icon is hidden so you don't see two. Works in full-screen apps too. Hold Shift, Option, Command or Control while clicking to reach Apple's original.") {
             SettingsRow(title: "Apple's Control Center opens MacMaster's dropdown",
                         subtitle: foundLine(redirect.foundControlCenter, enabled: settings.redirectControlCenter),
                         symbol: "switch.2", colors: Theme.Palette.indigo) {

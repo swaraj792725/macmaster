@@ -85,11 +85,11 @@ final class WiFiNStatSampler: @unchecked Sendable {
         query = unsafeBitCast(q, to: Query.self); destroy = unsafeBitCast(x, to: Destroy.self)
         self.onRows = onRows
         lastSample = Date(); primed = false
-        guard let m = create(nil, queue, { [unowned self] src, _ in
-            guard let src else { return }
+        guard let m = create(nil, queue, { [weak self] src, _ in
+            guard let self, let src else { return }
             let key = Int(bitPattern: src)
-            setDesc(src) { [unowned self] dict in
-                guard let dict = dict as? [String: Any] else { return }
+            setDesc(src) { [weak self] dict in
+                guard let self, let dict = dict as? [String: Any] else { return }
                 let pid = (dict["processID"] as? NSNumber)?.int32Value ?? 0
                 let name = dict["processName"] as? String ?? "?"
                 let rx = (dict["rxBytes"] as? NSNumber)?.uint64Value ?? 0
@@ -98,7 +98,8 @@ final class WiFiNStatSampler: @unchecked Sendable {
                 if (dict["interface"] as? NSNumber)?.intValue == 1 { return }
                 self.sources[key] = Entry(pid: pid, name: name, rx: rx, tx: tx)
             }
-            setRemoved(src) { [unowned self] in
+            setRemoved(src) { [weak self] in
+                guard let self else { return }
                 // Keep the final counters in `previous` so the next sample still sees the last delta.
                 if let e = self.sources.removeValue(forKey: key) { self.finished.append((key, e)) }
             }
@@ -107,7 +108,7 @@ final class WiFiNStatSampler: @unchecked Sendable {
         _ = addTCP(m); _ = addUDP(m)
         let tm = DispatchSource.makeTimerSource(queue: queue)
         tm.schedule(deadline: .now() + 1, repeating: interval, leeway: .milliseconds(300))
-        tm.setEventHandler { [unowned self] in self.sample() }
+        tm.setEventHandler { [weak self] in self?.sample() }
         timer = tm
         tm.resume()
         return true
@@ -126,7 +127,7 @@ final class WiFiNStatSampler: @unchecked Sendable {
 
     private func sample() {
         guard let m = manager, let query else { return }
-        query(m) { [unowned self] in self.finishSample() }
+        query(m) { [weak self] in self?.finishSample() }
     }
 
     private func finishSample() {

@@ -158,6 +158,9 @@ private final class RedirectTap: @unchecked Sendable {
         self.onMiss = onMiss
     }
 
+    /// Tap was disabled: the matching mouse-up may never arrive, so don't eat the next unrelated one.
+    func reset() { swallowUp = false }
+
     func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         let pass = Unmanaged.passUnretained(event)
         switch type {
@@ -215,6 +218,8 @@ final class AppleItemRedirect {
     @ObservationIgnored private var tap: RedirectTap?
     @ObservationIgnored private var observers: [(NotificationCenter, NSObjectProtocol)] = []
     @ObservationIgnored private var timer: Timer?
+    /// Wanted but not running (no permission yet, tap creation failed): try again periodically.
+    @ObservationIgnored private var retryTimer: Timer?
     @ObservationIgnored private var anchor: NSWindow?
     @ObservationIgnored private var refreshing = false
     @ObservationIgnored private var lastClosed: UInt64 = 0
@@ -228,19 +233,49 @@ final class AppleItemRedirect {
         let s = ControlCenterSettings.shared
         let (wantCC, wantClock) = (s.redirectControlCenter, s.redirectClock)
         frames.withLock { $0.wantControlCenter = wantCC; $0.wantClock = wantClock }
+        defer { syncOwnIcons() }
         guard wantCC || wantClock else {
-            stop(); set(.off); return
+            stop(); stopRetry(); set(.off); return
         }
         guard Permissions.isGranted(.accessibility) else {
-            stop(); set(.needsAccessibility); return
+            stop(); set(.needsAccessibility); scheduleRetry(); return
+        }
+        if let r = runner, !r.isEnabled {
+            redirectLog.error("event tap is dead; restarting")
+            stop()
         }
         if runner == nil { start() } else { refresh() }
+        if runner == nil { scheduleRetry() } else { stopRetry() }
+    }
+
+    private func scheduleRetry() {
+        guard retryTimer == nil else { return }
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.update() }
+        }
+    }
+
+    private func stopRetry() {
+        retryTimer?.invalidate()
+        retryTimer = nil
     }
 
     private func set(_ new: Status) {
         guard status != new else { return }
         redirectLog.info("status \(String(describing: self.status), privacy: .public) -> \(String(describing: new), privacy: .public)")
         status = new
+        syncOwnIcons()
+    }
+
+    /// While Apple's Control Center opens our dropdown, MacMaster's own icon would be a second way to the same place.
+    var replacesControlCenterIcon: Bool { ControlCenterSettings.shared.redirectControlCenter && status == .active }
+    /// Same for Apple's clock and MacMaster's clock item.
+    var replacesClockIcon: Bool { ControlCenterSettings.shared.redirectClock && status == .active }
+
+    /// Hide (or bring back) MacMaster's own icons to match. Only a working redirect hides them, so there's always a way in.
+    func syncOwnIcons() {
+        MainStatusItem.shared.update()
+        ClockMenuBar.shared.update()
     }
 
     private func start() {
@@ -253,6 +288,7 @@ final class AppleItemRedirect {
         })
         let r = KeyboardTapRunner(name: "macmaster.appleitemredirect", types: [.leftMouseDown, .leftMouseUp], onDisabled: {
             redirectLog.error("event tap was disabled by the system; re-enabling")
+            t.reset()
         }) { type, event in
             t.handle(type, event)
         }
@@ -266,7 +302,11 @@ final class AppleItemRedirect {
         set(.active)
         observe()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // Dead tap or revoked permission: update() tears down and restarts (or waits for the grant).
+                if self.runner?.isEnabled != true || !Permissions.isGranted(.accessibility) { self.update() } else { self.refresh() }
+            }
         }
         refresh()
     }
@@ -316,13 +356,16 @@ final class AppleItemRedirect {
                 let me = AppleItemRedirect.shared
                 me.refreshing = false
                 guard me.runner != nil else { return }
-                me.frames.withLock {
-                    $0.controlCenter = found[AppleMenuItem.controlCenter]
-                    $0.clock = found[AppleMenuItem.clock]
+                // A full-screen app hides the menu bar: Apple's items then report off-screen frames and the scan
+                // finds nothing. Keep the last on-screen frames; the revealed bar puts the items right back there.
+                let f = me.frames.withLock {
+                    if let r = found[AppleMenuItem.controlCenter] { $0.controlCenter = r }
+                    if let r = found[AppleMenuItem.clock] { $0.clock = r }
                     $0.stamp = AppleItemRedirect.nowNanos()
+                    return $0
                 }
-                me.foundControlCenter = found[AppleMenuItem.controlCenter] != nil
-                me.foundClock = found[AppleMenuItem.clock] != nil
+                me.foundControlCenter = f.controlCenter != nil
+                me.foundClock = f.clock != nil
                 me.lastScan = Date()
                 let s = ControlCenterSettings.shared
                 let missing = (s.redirectControlCenter && !me.foundControlCenter) || (s.redirectClock && !me.foundClock)
@@ -361,14 +404,21 @@ final class AppleItemRedirect {
     func test() {
         ClockMenuBar.shared.close()
         if MainStatusItem.shared.isShown { MainStatusItem.shared.close(); return }
-        if let r = AppleMenuScanner.scan(timeout: 0.4)[AppleMenuItem.controlCenter] {
-            redirectLog.info("test: found Apple's Control Center at \(AppleMenuScanner.describe(r), privacy: .public)")
-            open(controlCenterAt: r)
-        } else {
-            let main = CGDisplayBounds(CGMainDisplayID())
-            let r = CGRect(x: main.midX - 14, y: 0, width: 28, height: 24)
-            redirectLog.error("test: Apple's Control Center icon not found; using top centre \(AppleMenuScanner.describe(r), privacy: .public)")
-            open(controlCenterAt: r)
+        // AX scan off the main thread: a slow menu bar agent must not freeze the settings page.
+        Task.detached(priority: .userInitiated) {
+            let found = AppleMenuScanner.scan(timeout: 0.4)[AppleMenuItem.controlCenter]
+            await MainActor.run {
+                let me = AppleItemRedirect.shared
+                if let r = found {
+                    redirectLog.info("test: found Apple's Control Center at \(AppleMenuScanner.describe(r), privacy: .public)")
+                    me.open(controlCenterAt: r)
+                } else {
+                    let main = CGDisplayBounds(CGMainDisplayID())
+                    let r = CGRect(x: main.midX - 14, y: 0, width: 28, height: 24)
+                    redirectLog.error("test: Apple's Control Center icon not found; using top centre \(AppleMenuScanner.describe(r), privacy: .public)")
+                    me.open(controlCenterAt: r)
+                }
+            }
         }
     }
 
@@ -385,13 +435,19 @@ final class AppleItemRedirect {
             bottom = max(bottom, (primary - s.frame.maxY) + (s.frame.maxY - s.visibleFrame.maxY))
         }
         let frame = NSRect(x: rect.minX, y: primary - bottom, width: max(rect.width, 1), height: bottom)
-        let w = anchor ?? {
-            let w = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
+        let w: NSWindow = anchor ?? { () -> NSWindow in
+            // A non-activating panel: while MacMaster is a regular (Dock) app, a plain window can't join another
+            // app's full-screen Space, so the popover hung from it opened on the desktop Space, out of sight.
+            let w = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            w.hidesOnDeactivate = false
+            w.becomesKeyOnlyIfNeeded = true
             w.isReleasedWhenClosed = false
             w.isOpaque = false
             w.backgroundColor = .clear
             w.hasShadow = false
-            w.level = .statusBar
+            // Above status-item level: macOS hides an app's status-level windows (and popovers hung from them) when
+            // the app is switched off in System Settings › Menu Bar › Allow in the Menu Bar.
+            w.level = .popUpMenu
             w.ignoresMouseEvents = true
             w.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
             w.contentView = NSView(frame: NSRect(origin: .zero, size: frame.size))

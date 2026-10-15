@@ -4,6 +4,26 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.4.4] - 2026-10-15
+
+### Changed
+- ⌘Q now closes MacMaster's windows and takes it out of the Dock and ⌘Tab, but keeps it running, so menu bar icons, shortcuts, mouse and tiling keep working. Open it again from its menu bar icon. To quit for real, use ⌥⌘Q (Quit MacMaster Completely) or Quit from the Dock icon.
+- When Apple's Control Center or clock is set to open MacMaster, MacMaster's own matching menu bar icon is hidden, so you don't see two.
+- Menu Bar Manager: Control Center and Clock still can't be dragged (macOS pins them), but you can now choose right there whether clicking them opens MacMaster's dropdown and Clock. Their tiles show when a click is redirected, and right-clicking a tile has the same switches.
+
+### Fixed
+- Mouse: a side button with a drag action (switch Spaces, scroll) often did nothing when clicked, because the slightest hand movement during the press counted as a drag. A quick press that barely moves now always counts as a click.
+- Clicking Apple's Control Center or clock did nothing in a full-screen app when it was set to open MacMaster. It now opens MacMaster's dropdown or Clock there too, also when MacMaster is open in the Dock. The dropdown and Clock also show when MacMaster is switched off under System Settings › Menu Bar › Allow in the Menu Bar. They also no longer close again the instant they open while another app is in front.
+- ⌘Tab switcher: windows parked in Stage Manager's side strip no longer show a shrunk, tilted picture, and windows in another Stage Manager set now show their contents instead of only the app icon.
+- Mouse: the scroll wheel could stop working entirely (often after sleep or a display change) until Mouse was turned off and on. Smooth scrolling no longer depends on the display timer that could stop, a stalled glide now lets the wheel through, and a dead event tap is rebuilt on its own.
+- Mouse page no longer uses high CPU after a missed button release, and redraws less when idle.
+- Tiling: modifier-drag, ⌘Tab switcher and the Control Center/clock redirect now rebuild themselves if macOS disables their event tap, and notice when Accessibility is revoked or granted again. A dead ⌘Tab switcher can no longer leave you with no app switcher at all.
+- Keyboard cleaning mode ends (and frees the pointer) if Accessibility is revoked while it's on.
+- Menu bar scanning no longer shortens how long every other feature waits on slow apps (it changed a process-wide timeout), and a hung app can't freeze Snap Layouts.
+- Network speed no longer shows a huge one-off spike after a failed reading. Stats menu bar items no longer redraw on every settings write, and a slow sensor read no longer piles up more reads behind it. Battery history is saved off the main thread; turning off the Hyper key and the Control Center redirect test no longer briefly freeze the app.
+- Mission Control, Spotlight and other system shortcut actions no longer lose your own shortcut setting when triggered twice quickly.
+- Startup items: removing a system item no longer reports success when the file was left in place. Large Files and Duplicates no longer mix results when rescanning or stopping. Clipboard history caps memory used by images. Optimizer "Restore all" only reverts tweaks MacMaster made. Shell commands can no longer hang the app past their timeout.
+
 ## [0.4.3] - 2026-10-14
 
 ### Fixed

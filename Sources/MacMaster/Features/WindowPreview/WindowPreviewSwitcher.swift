@@ -79,6 +79,12 @@ final class WindowPreviewSwitcherTap: @unchecked Sendable {
     /// The main side ended the session (click, empty list...): stop swallowing keys.
     func deactivate() { active = false }
 
+    /// False once the system disabled the tap for good (or it died).
+    var isEnabled: Bool {
+        guard let t = tap else { return false }
+        return CFMachPortIsValid(t) && CGEvent.tapIsEnabled(tap: t)
+    }
+
     func start() -> Bool {
         let ready = DispatchSemaphore(value: 0)
         let ok = OSAllocatedUnfairLock(initialState: false)
@@ -244,6 +250,8 @@ final class WindowPreviewSwitcher {
     private var liveTask: Task<Void, Never>?
 
     var isRunning: Bool { tap != nil }
+    /// Running but its tap is dead: ⌘Tab may be suppressed with nothing handling it.
+    var isHealthy: Bool { tap?.isEnabled ?? false }
 
     // MARK: Lifecycle
 

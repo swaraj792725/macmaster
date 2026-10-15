@@ -385,7 +385,7 @@ final class OptimizerEngine {
             current.insert(p.pid)
             if hogSince[p.pid] == nil { hogSince[p.pid] = (p.name, now) }
         }
-        for pid in hogSince.keys where !current.contains(pid) { hogSince[pid] = nil }
+        for pid in hogSince.keys where !current.contains(pid) { hogSince[pid] = nil; notifiedAt["auto.cpu.\(pid)"] = nil }
         for (pid, entry) in hogSince where now.timeIntervalSince(entry.since) >= window && canNotify("auto.cpu.\(pid)", now) {
             let pct = monitor.processes.first { $0.pid == pid }.map { Int($0.cpu * 100) } ?? autoCPUPercent
             findings.append("\(entry.name) has used about \(pct)% of a CPU core for \(Int(now.timeIntervalSince(entry.since) / 60)) min.")

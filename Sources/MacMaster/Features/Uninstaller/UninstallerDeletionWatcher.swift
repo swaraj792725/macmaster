@@ -43,8 +43,10 @@ private final class UninstallerDeletionIndex: @unchecked Sendable {
         }
     }
 
+    /// Async so main never waits behind a long scan; `self` stays alive until the stream is torn down
+    /// (the stream context holds it unretained). A later `start()` queues after this on the same serial queue.
     func stop() {
-        queue.sync {
+        queue.async { [self] in
             guard let s = stream else { return }
             FSEventStreamStop(s)
             FSEventStreamInvalidate(s)

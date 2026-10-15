@@ -235,7 +235,8 @@ final class OptimizerTweakModel {
         isRestoring = true; errors = [:]
         defer { isRestoring = false; refresh() }
         var restarts = Set<OptimizerTweakRestart>()
-        for t in OptimizerTweakCatalog.all where originals[t.id] != nil || Self.isActive(t) {
+        // Only tweaks MacMaster changed; a hand-set value has no original and must not be deleted.
+        for t in OptimizerTweakCatalog.all where originals[t.id] != nil && !busy.contains(t.id) {
             await restoreSettings(for: t.id)
             restarts.insert(t.restart)
         }

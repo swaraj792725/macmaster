@@ -47,7 +47,8 @@ enum WindowPreviewActions {
     static func close(_ w: WindowPreviewWindow) {
         if w.pid == SelfAX.pid { NSApp.window(withWindowNumber: Int(w.id))?.performClose(nil); return }
         guard let ax = resolve(w),
-              let btn = WindowPreviewAX.attr(ax, kAXCloseButtonAttribute) else { return }
+              let btn = WindowPreviewAX.attr(ax, kAXCloseButtonAttribute),
+              CFGetTypeID(btn) == AXUIElementGetTypeID() else { return }
         AXUIElementPerformAction(btn as! AXUIElement, kAXPressAction as CFString)
     }
 

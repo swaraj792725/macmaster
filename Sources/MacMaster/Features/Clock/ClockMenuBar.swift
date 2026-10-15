@@ -22,7 +22,7 @@ final class ClockMenuBar: NSObject, NSPopoverDelegate {
 
     /// Creates or removes the status item to match the setting. Idempotent.
     func update() {
-        if ClockSettings.shared.showInMenuBar {
+        if ClockSettings.shared.showInMenuBar && !AppleItemRedirect.shared.replacesClockIcon {
             if item == nil {
                 let it = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
                 if let b = it.button {

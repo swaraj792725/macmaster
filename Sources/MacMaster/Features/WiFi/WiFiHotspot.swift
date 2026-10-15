@@ -216,8 +216,10 @@ enum WiFiHotspot {
     private static func pressWiFiMenuExtra() -> Bool {
         guard let cc = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.controlcenter").first else { return false }
         let app = AXUIElementCreateApplication(cc.processIdentifier)
+        AXUIElementSetMessagingTimeout(app, 0.5)
         var bar: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(app, "AXExtrasMenuBar" as CFString, &bar) == .success, let bar else { return false }
+        guard AXUIElementCopyAttributeValue(app, "AXExtrasMenuBar" as CFString, &bar) == .success, let bar,
+              CFGetTypeID(bar) == AXUIElementGetTypeID() else { return false }
         var kids: CFTypeRef?
         guard AXUIElementCopyAttributeValue(bar as! AXUIElement, kAXChildrenAttribute as CFString, &kids) == .success,
               let items = kids as? [AXUIElement] else { return false }

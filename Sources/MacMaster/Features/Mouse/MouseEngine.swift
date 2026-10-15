@@ -2,6 +2,8 @@ import AppKit
 import CoreGraphics
 import os
 
+private let mouseLog = Logger(subsystem: "com.macmaster.app", category: "mouse")
+
 // MARK: - Engine (main actor facade)
 
 @MainActor
@@ -129,6 +131,11 @@ final class MouseEngine: ObservableObject {
                     // Permission revoked while running.
                     self.tearDownCore()
                     self.status = .needsAccessibility
+                } else if let c = self.core, !c.isHealthy {
+                    // Tap died or stayed disabled (e.g. after Accessibility was toggled): rebuild it.
+                    mouseLog.error("mouse tap unhealthy; restarting")
+                    self.tearDownCore()
+                    self.attemptStart()
                 }
             }
         }
@@ -170,6 +177,9 @@ final class MouseTapCore: @unchecked Sendable {
         var anchor = CGPoint.zero
         var frozeCursor = false
         var holdTimer: CFRunLoopTimer?
+        var pressedAt = 0.0
+        /// A drag step ran a discrete action (Space switch, Mission Control, custom): the press was a gesture.
+        var dragFired = false
     }
     private var buttons: [Int: ButtonState] = [:]
     private var pendingClicks: [Int: CFRunLoopTimer] = [:]
@@ -180,13 +190,23 @@ final class MouseTapCore: @unchecked Sendable {
     private static let pixelsPerTick = 56.0
     private static let holdDelay = 0.4
     private static let doubleClickWindow = 0.28
-    private static let dragSlop = 5.0
+    private static let dragSlop = 10.0
+    /// A press this short that moved this little is a click, even if the hand nudged the mouse past the slop.
+    private static let tapTime = 0.35
+    private static let tapMove = 30.0
 
     init(config: OSAllocatedUnfairLock<MouseConfig>) {
         self.config = config
     }
 
     // MARK: Lifecycle
+
+    /// False when the tap's port died or macOS left it disabled. Read off the tap thread: `tap` is only
+    /// written before `start` returns and inside `stop`.
+    var isHealthy: Bool {
+        guard let t = tap else { return false }
+        return CFMachPortIsValid(t) && CGEvent.tapIsEnabled(tap: t)
+    }
 
     func start() -> Bool {
         let ready = DispatchSemaphore(value: 0)
@@ -340,32 +360,34 @@ final class MouseTapCore: @unchecked Sendable {
             }
         }
 
-        if !cfg.smoothEnabled || commandPass {
-            writeInPlace(event, swapped: swapped, negY: cfg.reverseVertical, negX: cfg.reverseHorizontal,
-                         scale: commandPass ? 1 : speedFactor, flags: newFlags)
-            let pts = hypot(Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)),
-                            Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis2)))
-            stats.recordScroll(pixels: pts)
-            return pass
+        if cfg.smoothEnabled && !commandPass {
+            // Smooth path: swallow the wheel tick, feed the animator.
+            let now = MouseSmoothScroller.now()
+            let interval = now - lastWheelTime
+            lastWheelTime = now
+            let rate = 1 / max(interval, 0.004)
+            emaRate = interval > 0.3 ? 0 : (emaRate == 0 ? rate : emaRate * 0.5 + rate * 0.5)
+            let t = max(0, min(1, (emaRate - 5) / 30))
+            let accel = 1 + cfg.acceleration.gain * (t * t * (3 - 2 * t))
+
+            func px(_ d: Double) -> Double {
+                guard d != 0 else { return 0 }
+                let ticks = max(-4, min(4, d))
+                return ticks * Self.pixelsPerTick * cfg.speed * speedFactor * accel
+            }
+            if scroller.add(dy: px(dy), dx: px(dx), flags: newFlags,
+                            params: .init(tau: cfg.smoothness.tau, inertia: cfg.inertia)) {
+                return nil
+            }
+            // Animator was stalled and has been restarted: let this tick through as a plain scroll.
         }
 
-        // Smooth path: swallow the wheel tick, feed the animator.
-        let now = MouseSmoothScroller.now()
-        let interval = now - lastWheelTime
-        lastWheelTime = now
-        let rate = 1 / max(interval, 0.004)
-        emaRate = interval > 0.3 ? 0 : (emaRate == 0 ? rate : emaRate * 0.5 + rate * 0.5)
-        let t = max(0, min(1, (emaRate - 5) / 30))
-        let accel = 1 + cfg.acceleration.gain * (t * t * (3 - 2 * t))
-
-        func px(_ d: Double) -> Double {
-            guard d != 0 else { return 0 }
-            let ticks = max(-4, min(4, d))
-            return ticks * Self.pixelsPerTick * cfg.speed * speedFactor * accel
-        }
-        scroller.add(dy: px(dy), dx: px(dx), flags: newFlags,
-                     params: .init(tau: cfg.smoothness.tau, inertia: cfg.inertia))
-        return nil
+        writeInPlace(event, swapped: swapped, negY: cfg.reverseVertical, negX: cfg.reverseHorizontal,
+                     scale: commandPass ? 1 : speedFactor, flags: newFlags)
+        let pts = hypot(Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1)),
+                        Double(event.getIntegerValueField(.scrollWheelEventPointDeltaAxis2)))
+        stats.recordScroll(pixels: pts)
+        return pass
     }
 
     /// Rewrite a discrete wheel event (reverse / swap / scale) without smoothing.
@@ -407,6 +429,7 @@ final class MouseTapCore: @unchecked Sendable {
         var st = ButtonState()
         st.mapping = mapping
         st.anchor = event.location
+        st.pressedAt = CFAbsoluteTimeGetCurrent()
         if mapping.hold.kind != .none {
             st.holdTimer = makeTimer(after: Self.holdDelay) { [weak self] in self?.holdFired(b) }
         }
@@ -454,12 +477,14 @@ final class MouseTapCore: @unchecked Sendable {
             if abs(st.accX) >= threshold, abs(st.accX) >= abs(st.accY) {
                 // Drag left → the Space on the right comes in, like a trackpad swipe.
                 MouseActionRunner.run(MouseAction(st.accX < 0 ? .spaceRight : .spaceLeft), button: b)
+                st.dragFired = true
                 st.accX = 0; st.accY = 0
             } else if abs(st.accY) >= threshold, abs(st.accY) > abs(st.accX) {
                 let dir = st.accY < 0 ? 2 : 3
                 if !st.firedDirections.contains(dir) {
                     st.firedDirections.insert(dir)
                     MouseActionRunner.run(MouseAction(dir == 2 ? .missionControl : .appExpose), button: b)
+                    st.dragFired = true
                 }
                 st.accX = 0; st.accY = 0
             }
@@ -478,6 +503,7 @@ final class MouseTapCore: @unchecked Sendable {
                 if action.kind.repeatsWhileDragging || !st.firedDirections.contains(dir) {
                     st.firedDirections.insert(dir)
                     MouseActionRunner.run(action, button: b)
+                    st.dragFired = true
                 }
                 st.accX = 0; st.accY = 0
             }
@@ -512,7 +538,11 @@ final class MouseTapCore: @unchecked Sendable {
         if let t = st.holdTimer { CFRunLoopTimerInvalidate(t) }
         if st.frozeCursor { CGAssociateMouseAndMouseCursorPosition(1) }
         if st.scrollBegan { postDragScroll(&st, dx: 0, dy: 0, phaseEnd: true) }
-        if st.firedOnDown || st.holdFired || st.dragging { return nil }
+        if st.firedOnDown || st.holdFired { return nil }
+        if st.dragging {
+            let quick = CFAbsoluteTimeGetCurrent() - st.pressedAt < Self.tapTime
+            guard !st.dragFired, quick, hypot(st.totalX, st.totalY) < Self.tapMove else { return nil }
+        }
 
         let m = st.mapping
         if m.doubleClick.kind != .none {

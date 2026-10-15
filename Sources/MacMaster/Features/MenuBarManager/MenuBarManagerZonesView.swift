@@ -157,8 +157,8 @@ struct MenuBarManagerZonesView: View {
     private func footer(real: Bool, anyLocked: Bool, forced: Int) -> some View {
         let lines: [String] = [
             real ? nil : "Real icons stay where macOS put them on this version. Icons macOS already pushed out of the bar (behind the notch or dropped) are always in the « panel.",
-            anyLocked ? "Control Center and Clock are locked: macOS pins them, so they can't be dragged." : nil,
         ].compactMap { $0 }
+        if anyLocked { MenuBarManagerAppleItemsBox() }
         if !lines.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(lines, id: \.self) { Text($0).font(.caption).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true) }
@@ -261,7 +261,19 @@ private struct MenuBarManagerZoneTile: View {
     let tile: MenuBarManagerTile
     let real: Bool
     private let manager = MenuBarManager.shared
+    private let settings = ControlCenterSettings.shared
     @State private var hover = false
+
+    private var target: AppleItemRedirect.Target? {
+        MenuBarManager.appleTarget(name: tile.name, identifier: tile.item?.title ?? tile.entry?.identifier ?? "")
+    }
+    private var redirected: Bool {
+        switch target {
+        case .controlCenter: settings.redirectControlCenter
+        case .clock: settings.redirectClock
+        case nil: false
+        }
+    }
 
     var body: some View {
         let busy = real && tile.item.map { manager.busyItemID == $0.id } == true
@@ -275,7 +287,10 @@ private struct MenuBarManagerZoneTile: View {
             }
             .frame(width: 56, height: 40)
             .overlay(alignment: .topTrailing) {
-                if tile.locked {
+                if redirected {
+                    Image(systemName: "arrow.turn.down.right").font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(Color.accentColor).padding(4)
+                } else if tile.locked {
                     Image(systemName: "lock.fill").font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary).padding(4)
                 }
@@ -289,11 +304,17 @@ private struct MenuBarManagerZoneTile: View {
         .scaleEffect(hover && !tile.locked ? 1.04 : 1)
         .onHover { hover = $0 }
         .animation(.spring(response: 0.25, dampingFraction: 0.75), value: hover)
-        .help([tile.name, tile.detail, tile.locked ? "Locked by macOS" : nil].compactMap { $0 }.joined(separator: " · "))
+        .help([tile.name, tile.detail, redirected ? "Click opens MacMaster's \(target == .clock ? "Clock" : "dropdown")" : nil,
+               tile.locked ? "Pinned by macOS" : nil].compactMap { $0 }.joined(separator: " · "))
         .modifier(MenuBarManagerTileDrag(tile: tile))
         .contextMenu {
             Button { manager.openTile(tile) } label: { Label("Open Its Menu", systemImage: "cursorarrow.click") }
-            if tile.locked {
+            if let target {
+                Divider()
+                Toggle(target == .clock ? "Click Opens MacMaster's Clock" : "Click Opens MacMaster's Dropdown",
+                       isOn: MenuBarManagerAppleItemsBox.binding(target))
+                Button("Control Center & Clock Settings…") { MainWindow.show(section: .controlcenter) }
+            } else if tile.locked {
                 Text("Locked by macOS")
             } else {
                 Divider()
@@ -305,6 +326,53 @@ private struct MenuBarManagerZoneTile: View {
                     } label: { Label("Move to \(z.title)", systemImage: SymbolKit.resolve(z.symbol)) }
                 }
             }
+        }
+    }
+}
+
+// MARK: - Apple's pinned items
+
+/// Control Center and Clock can't be dragged (macOS pins them), but what a click on them does is ours to choose.
+struct MenuBarManagerAppleItemsBox: View {
+    @State private var settings = ControlCenterSettings.shared
+    @State private var redirect = AppleItemRedirect.shared
+
+    static func binding(_ target: AppleItemRedirect.Target) -> Binding<Bool> {
+        let s = ControlCenterSettings.shared
+        return Binding(get: { target == .clock ? s.redirectClock : s.redirectControlCenter },
+                       set: { if target == .clock { s.redirectClock = $0 } else { s.redirectControlCenter = $0 } })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "lock.fill").font(.caption).foregroundStyle(.secondary)
+                Text("Control Center and Clock are pinned by macOS, so they can't be dragged. You can choose what clicking them does:")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Toggle("Apple's Control Center opens MacMaster's dropdown", isOn: $settings.redirectControlCenter)
+            Toggle("Apple's clock opens MacMaster's Clock", isOn: $settings.redirectClock)
+            HStack(spacing: 8) {
+                if settings.redirectControlCenter || settings.redirectClock {
+                    Text(note).font(.caption).foregroundStyle(redirect.status == .active ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.orange))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                Button("More Settings…") { MainWindow.show(section: .controlcenter) }.buttonStyle(.mmGhost)
+            }
+        }
+        .toggleStyle(.switch).controlSize(.small)
+        .padding(10)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private var note: String {
+        switch redirect.status {
+        case .active: "On: MacMaster's own matching icon is hidden. Shift/Option/Command/Control-click reaches Apple's."
+        case .needsAccessibility: "Needs Accessibility access (More Settings)."
+        case .notFound: "Apple's icon wasn't found in the menu bar yet."
+        case .failed: "Couldn't start the click listener (More Settings)."
+        case .off: ""
         }
     }
 }

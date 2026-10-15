@@ -14,8 +14,11 @@ actor WindowPreviewThumbnailer {
     private var cache: [UInt32: Entry] = [:]
     /// Windows that couldn't be captured recently (minimized, other Space...): don't hammer SCK for them.
     private var failed: [UInt32: Date] = [:]
+    private var failCount: [UInt32: Int] = [:]
     /// Last untransformed size seen per window (AX often lists no windows for apps sitting in the Stage Manager strip).
     private var cleanSize: [UInt32: CGSize] = [:]
+    /// Real window size as last reported by Accessibility during a window-list refresh (wins over `cleanSize`).
+    private var axSize: [UInt32: CGSize] = [:]
     private let maxEntries = 90
     private var content: SCShareableContent?
     private var contentDate = Date.distantPast
@@ -97,6 +100,18 @@ actor WindowPreviewThumbnailer {
         return out
     }
 
+    /// Real (untransformed) sizes from the AX window list: the reference that tells a Stage Manager strip
+    /// capture (shrunk, tilted) from a real one when the app can't be asked again at capture time.
+    func noteRealSizes(_ sizes: [UInt32: CGSize]) {
+        for (id, sz) in sizes where sz.width > 1 && sz.height > 1 { axSize[id] = sz }
+    }
+
+    /// Whether any image (memory or disk) exists for the window.
+    func hasImage(_ id: UInt32) -> Bool {
+        loadDiskIfNeeded()
+        return cache[id] != nil
+    }
+
     /// Forget thumbnails of windows that no longer exist.
     func prune(keeping ids: Set<UInt32>) {
         guard !ids.isEmpty else { return }   // an empty list is a failed read, not "every window closed"
@@ -104,13 +119,15 @@ actor WindowPreviewThumbnailer {
         for k in gone { cache[k] = nil }
         Self.remove(gone)
         for k in cleanSize.keys where !ids.contains(k) { cleanSize[k] = nil }
+        for k in axSize.keys where !ids.contains(k) { axSize[k] = nil }
+        for k in failed.keys where !ids.contains(k) { failed[k] = nil; failCount[k] = nil }
     }
 
     func capture(id: UInt32, box: CGSize, maxAge: TimeInterval) async -> CGImage? {
         let wantWidth = Int(box.width)
         if id & 0x8000_0000 != 0 { return nil } // synthetic id, no real window
         loadDiskIfNeeded()
-        if let f = failed[id], Date().timeIntervalSince(f) < 15 { return nil }
+        if let f = failed[id], Date().timeIntervalSince(f) < backoff(id) { return cache[id]?.image }
         if let e = cache[id], Date().timeIntervalSince(e.date) < maxAge, e.pixelWidth >= wantWidth - 8 { return e.image }
 
         var shareable = await shareableContent(refresh: false)
@@ -120,54 +137,71 @@ actor WindowPreviewThumbnailer {
             target = shareable?.windows.first { $0.windowID == id }
         }
         guard let scWindow = target, scWindow.frame.width > 1, scWindow.frame.height > 1 else {
-            failed[id] = Date()
-            return nil
+            noteFailure(id)
+            return cache[id]?.image
         }
 
         // Live bounds: the shareable-content list can be seconds old, and Stage Manager animates windows in and out.
         let frame = WindowPreviewStageManager.liveBounds(id) ?? scWindow.frame
         guard frame.width > 1, frame.height > 1 else { return cache[id]?.image }
 
-        // Stage Manager shows non-active windows shrunk and tilted in its side strip, and SCK captures
-        // them exactly like that. Keep the last clean image instead of replacing it with a skewed one.
-        var provisional = false
+        // Stage Manager draws windows of the other stages shrunk and tilted in its side strip, and every
+        // capture API returns them exactly like that (asking for a bigger size doesn't help). Never store or
+        // show such a picture: keep the last clean one (memory or disk), or nothing (the tile shows the icon).
         if WindowPreviewStageManager.isEnabled {
             let pid = scWindow.owningApplication?.processID
-            let real = pid.flatMap { WindowPreviewStageManager.realSize(pid: $0, id: id) } ?? cleanSize[id]
+            let real = pid.flatMap { WindowPreviewStageManager.realSize(pid: $0, id: id) } ?? axSize[id] ?? cleanSize[id]
             let shrunk = real.map { frame.width < $0.width * 0.92 || frame.height < $0.height * 0.92 }
                 ?? WindowPreviewStageManager.looksLikeStrip(frame)
-            if shrunk {
-                if let cached = cache[id]?.image { return cached }
-                // Never seen this window un-shrunk (e.g. an app you haven't switched to since launch):
-                // a strip-sized capture beats an icon-only tile. Marked stale so a clean one replaces it.
-                provisional = true
-            } else {
-                cleanSize[id] = frame.size
-            }
+            if shrunk { return cache[id]?.image }
         }
 
         let scale = min(box.width / frame.width, box.height / frame.height, 2)
+        let w = max(2, Int(frame.width * scale)), h = max(2, Int(frame.height * scale))
         let cfg = SCStreamConfiguration()
-        cfg.width = max(2, Int(frame.width * scale))
-        cfg.height = max(2, Int(frame.height * scale))
+        cfg.width = w
+        cfg.height = h
         cfg.showsCursor = false
         cfg.ignoreShadowsSingleWindow = true
         let filter = SCContentFilter(desktopIndependentWindow: scWindow)
-        guard let image = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg) else {
-            failed[id] = Date()
+        var image = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
+        if image == nil {
+            // SCK refuses windows that are ordered in but not visible (e.g. Safari windows of another stage:
+            // error -3811) while the window server still has their real contents. Ordered-out windows are
+            // the opposite (SCK ok, this returns nil), so the two cover each other.
+            image = WindowPreviewStageManager.legacyCapture(id: id, width: w, height: h)
+        }
+        guard let image else {
+            noteFailure(id)
+            return cache[id]?.image
+        }
+        // The window started moving into the strip while we were capturing: the picture may be skewed.
+        if WindowPreviewStageManager.isEnabled, let after = WindowPreviewStageManager.liveBounds(id),
+           abs(after.width - frame.width) > 2 || abs(after.height - frame.height) > 2 {
             return cache[id]?.image
         }
 
-        store(image, id: id, wantWidth: wantWidth, provisional: provisional)
+        if WindowPreviewStageManager.isEnabled { cleanSize[id] = frame.size }
+        store(image, id: id, wantWidth: wantWidth)
         return image
     }
 
-    private func store(_ image: CGImage, id: UInt32, wantWidth: Int, provisional: Bool = false) {
+    /// Retry delay after failed captures: 15 s, doubling up to 5 min (windows nothing can capture).
+    private func backoff(_ id: UInt32) -> TimeInterval {
+        min(15 * pow(2, Double(max(0, (failCount[id] ?? 1) - 1))), 300)
+    }
+
+    private func noteFailure(_ id: UInt32) {
+        failed[id] = Date()
+        failCount[id] = min((failCount[id] ?? 0) + 1, 6)
+    }
+
+    private func store(_ image: CGImage, id: UInt32, wantWidth: Int) {
         failed[id] = nil
-        // Requested box width, not the aspect-fitted one. Provisional (strip-sized) images are dated in the
-        // past so the next un-shrunk sighting recaptures; they're kept in memory only.
-        cache[id] = Entry(image: image, date: provisional ? .distantPast : Date(), pixelWidth: wantWidth)
-        if !provisional { Self.save(image, id: id) }
+        failCount[id] = nil
+        // Requested box width, not the aspect-fitted one.
+        cache[id] = Entry(image: image, date: Date(), pixelWidth: wantWidth)
+        Self.save(image, id: id)
         if cache.count > maxEntries {
             let drop = cache.sorted { $0.value.date < $1.value.date }.prefix(cache.count - maxEntries)
             for (k, _) in drop { cache[k] = nil }
@@ -181,6 +215,8 @@ actor WindowPreviewThumbnailer {
         diskLoaded = false
         cache.removeAll()
         failed.removeAll()
+        failCount.removeAll()
+        axSize.removeAll()
         content = nil
     }
 
@@ -223,6 +259,28 @@ enum WindowPreviewStageManager {
         let mid = CGPoint(x: f.midX, y: primaryH - f.midY) // CG (top-left) → AppKit coordinates
         guard let screen = screens.first(where: { $0.frame.contains(mid) }) else { return false }
         return f.minX - screen.frame.minX < 260 || screen.frame.maxX - f.maxX < 260
+    }
+
+    private typealias WindowListImageFn = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+    /// `CGWindowListCreateImage` is marked unavailable in the macOS 15+ SDKs but still ships; resolved at runtime.
+    private static let windowListImage: WindowListImageFn? = {
+        guard let s = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
+        return unsafeBitCast(s, to: WindowListImageFn.self)
+    }()
+
+    /// One window's real contents (no shadow) from the window server, scaled to `width` x `height`.
+    /// Works for windows ScreenCaptureKit won't stream. nil for ordered-out windows.
+    static func legacyCapture(id: UInt32, width: Int, height: Int) -> CGImage? {
+        guard let fn = windowListImage else { return nil }
+        // optionIncludingWindow = 8; boundsIgnoreFraming = 1, nominalResolution = 16 (1x: no 2x backing copy to shrink).
+        guard let img = fn(.null, 8, id, 1 | 16)?.takeRetainedValue(), img.width > 1, img.height > 1 else { return nil }
+        if img.width <= width + 2 && img.height <= height + 2 { return img }
+        guard let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue) else { return img }
+        ctx.interpolationQuality = .high
+        ctx.draw(img, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return ctx.makeImage() ?? img
     }
 
     static func realSize(pid: pid_t, id: UInt32) -> CGSize? {

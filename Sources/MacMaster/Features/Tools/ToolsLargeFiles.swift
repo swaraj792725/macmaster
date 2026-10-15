@@ -87,6 +87,8 @@ final class ToolsLargeFilesModel {
     private(set) var scanned = 0
     private(set) var hasScanned = false
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// Bumped on every scan/stop so late callbacks from an older walk are dropped.
+    @ObservationIgnored private var generation = 0
 
     var totalSize: Int64 { results.reduce(0) { $0 + $1.size } }
     var selectedItems: [ToolsFileItem] { results.filter { selection.contains($0.url) } }
@@ -103,21 +105,31 @@ final class ToolsLargeFilesModel {
             olderThan: ageDays > 0 ? Date().addingTimeInterval(-Double(ageDays) * 86_400) : nil,
             packagesAsFiles: packagesAsFiles, includeHiddenAndLibrary: includeHidden)
         let order = sortOrder
+        generation += 1
+        let gen = generation
         task = Task {
-            await Task.detached(priority: .userInitiated) {
+            // Task.detached doesn't inherit cancellation, so forward it explicitly.
+            let inner = Task.detached(priority: .userInitiated) {
                 ToolsLargeFileScanner.scan(o, onBatch: { batch in
                     Task { @MainActor in
                         let m = ToolsLargeFilesModel.shared
+                        guard m.generation == gen else { return }
                         m.results.append(contentsOf: batch)
                         m.results.sort(using: order)
                     }
-                }, onProgress: { n in Task { @MainActor in ToolsLargeFilesModel.shared.scanned = n } })
-            }.value
-            isScanning = false
+                }, onProgress: { n in
+                    Task { @MainActor in
+                        let m = ToolsLargeFilesModel.shared
+                        if m.generation == gen { m.scanned = n }
+                    }
+                })
+            }
+            await withTaskCancellationHandler { await inner.value } onCancel: { inner.cancel() }
+            if generation == gen { isScanning = false }
         }
     }
 
-    func stop() { task?.cancel(); isScanning = false }
+    func stop() { generation += 1; task?.cancel(); isScanning = false }
 
     func resort() { results.sort(using: sortOrder) }
 

@@ -103,7 +103,8 @@ enum MenuBarManagerScanner {
         for e in extraAgentPids() where !known.contains(e.pid) { all.append(e) }
         all = all.filter { $0.pid > 0 && $0.pid != SelfAX.pid }
 
-        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.1)
+        // Timeouts are set per element in axLeaves; the system-wide one is process-global and would starve
+        // every other AX caller (tiling, window previews...) down to 0.1s.
         let lock = NSLock()
         nonisolated(unsafe) var results: [MenuBarManagerRawWindow] = []
         DispatchQueue.concurrentPerform(iterations: all.count) { i in
@@ -187,6 +188,7 @@ enum MenuBarManagerScanner {
         guard AXUIElementCopyAttributeValue(el, "AXExtrasMenuBar" as CFString, &barRef) == .success,
               let barRef, CFGetTypeID(barRef) == AXUIElementGetTypeID() else { return [] }
         let bar = unsafeBitCast(barRef, to: AXUIElement.self)
+        AXUIElementSetMessagingTimeout(bar, timeout)
         var kidsRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(bar, kAXChildrenAttribute as CFString, &kidsRef) == .success,
               let kids = kidsRef as? [AXUIElement] else { return [] }
@@ -195,7 +197,8 @@ enum MenuBarManagerScanner {
         var ordinals: [String: Int] = [:]
         var out: [AXLeaf] = []
         for kid in kids {
-            let inner = innerMenuBarItem(of: kid)
+            AXUIElementSetMessagingTimeout(kid, timeout)
+            let inner = innerMenuBarItem(of: kid, timeout: timeout)
             let leaf = inner ?? kid
             guard let f = axRect(leaf) ?? axRect(kid), f.width > 0, f.height > 0 else { continue }
             var ident = axString(leaf, kAXIdentifierAttribute)
@@ -230,15 +233,16 @@ enum MenuBarManagerScanner {
     }
 
     /// First AXMenuBarItem below `el` (depth <= 3), unless `el` already is one.
-    private nonisolated static func innerMenuBarItem(of el: AXUIElement, depth: Int = 0) -> AXUIElement? {
+    private nonisolated static func innerMenuBarItem(of el: AXUIElement, depth: Int = 0, timeout: Float = 0.1) -> AXUIElement? {
         if depth == 0, axString(el, kAXRoleAttribute) == "AXMenuBarItem" { return nil }
         guard depth < 3 else { return nil }
         var kidsRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(el, kAXChildrenAttribute as CFString, &kidsRef) == .success,
               let kids = kidsRef as? [AXUIElement] else { return nil }
         for k in kids {
+            AXUIElementSetMessagingTimeout(k, timeout)
             if axString(k, kAXRoleAttribute) == "AXMenuBarItem" { return k }
-            if let found = innerMenuBarItem(of: k, depth: depth + 1) { return found }
+            if let found = innerMenuBarItem(of: k, depth: depth + 1, timeout: timeout) { return found }
         }
         return nil
     }

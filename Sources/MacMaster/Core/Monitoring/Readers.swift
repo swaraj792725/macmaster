@@ -201,7 +201,13 @@ final class NetworkReader {
     private var last: (down: UInt64, up: UInt64, time: Date)?
 
     func read() -> NetworkReading {
-        let (down, up) = Self.interfaceTotals()
+        guard let (down, up) = Self.interfaceTotals() else {
+            // Read failed: report no traffic and keep the last good sample, so the next delta isn't
+            // the machine's whole lifetime traffic.
+            let (iface, ip) = Self.primaryAddress()
+            return NetworkReading(downRate: 0, upRate: 0, totalDown: last?.down ?? 0, totalUp: last?.up ?? 0,
+                                  primaryInterface: iface, localIP: ip)
+        }
         let now = Date()
         var dr = 0.0, ur = 0.0
         if let last {
@@ -217,12 +223,13 @@ final class NetworkReader {
     }
 
     /// 64-bit counters via NET_RT_IFLIST2 (getifaddrs uses 32-bit counters that wrap).
-    private static func interfaceTotals() -> (UInt64, UInt64) {
+    private static func interfaceTotals() -> (UInt64, UInt64)? {
         var mib: [Int32] = [CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0]
         var len = 0
-        guard sysctl(&mib, 6, nil, &len, nil, 0) == 0, len > 0 else { return (0, 0) }
+        guard sysctl(&mib, 6, nil, &len, nil, 0) == 0, len > 0 else { return nil }
+        len += 4096 // interfaces can appear between the size query and the read
         var buf = [UInt8](repeating: 0, count: len)
-        guard sysctl(&mib, 6, &buf, &len, nil, 0) == 0 else { return (0, 0) }
+        guard sysctl(&mib, 6, &buf, &len, nil, 0) == 0 else { return nil }
         var down: UInt64 = 0, up: UInt64 = 0
         buf.withUnsafeBytes { raw in
             var offset = 0

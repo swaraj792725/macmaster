@@ -87,7 +87,9 @@ enum ToolsDuplicateScanner {
     }
 
     static func scan(_ o: Options, progress: @escaping @Sendable (String) -> Void) async -> [ToolsDupGroup] {
-        let buckets = await Task.detached(priority: .userInitiated) { bucketBySize(o, progress: progress) }.value
+        // Task.detached doesn't inherit cancellation, so forward it explicitly.
+        let walk = Task.detached(priority: .userInitiated) { bucketBySize(o, progress: progress) }
+        let buckets = await withTaskCancellationHandler { await walk.value } onCancel: { walk.cancel() }
         let total = buckets.values.reduce(0) { $0 + $1.count }
         if total == 0 || Task.isCancelled { return [] }
 
@@ -134,6 +136,8 @@ final class ToolsDuplicatesModel {
     private(set) var status = ""
     private(set) var hasScanned = false
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// Bumped on every scan/stop so late results from an older scan are dropped.
+    @ObservationIgnored private var generation = 0
 
     var wasted: Int64 { groups.reduce(0) { $0 + $1.wasted } }
     var selectedBytes: Int64 { groups.flatMap(\.files).filter { selected.contains($0.url) }.reduce(0) { $0 + $1.size } }
@@ -147,10 +151,16 @@ final class ToolsDuplicatesModel {
         groups = []; selected = []; isScanning = true; hasScanned = true; status = "Indexing files…"
         let o = ToolsDuplicateScanner.Options(root: folder, minBytes: Int64(minSizeKB * 1024),
                                               packagesAsFiles: packagesAsFiles, includeHidden: includeHidden)
+        generation += 1
+        let gen = generation
         task = Task {
             let result = await ToolsDuplicateScanner.scan(o) { s in
-                Task { @MainActor in ToolsDuplicatesModel.shared.status = s }
+                Task { @MainActor in
+                    let m = ToolsDuplicatesModel.shared
+                    if m.generation == gen { m.status = s }
+                }
             }
+            guard generation == gen else { return }
             if !Task.isCancelled {
                 groups = result
                 autoSelect()
@@ -159,7 +169,7 @@ final class ToolsDuplicatesModel {
         }
     }
 
-    func stop() { task?.cancel(); isScanning = false }
+    func stop() { generation += 1; task?.cancel(); isScanning = false }
 
     /// Selects everything except one copy per group (oldest or newest).
     func autoSelect() {

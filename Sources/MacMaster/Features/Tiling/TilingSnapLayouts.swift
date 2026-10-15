@@ -172,6 +172,7 @@ final class TilingSnapLayoutsController {
     }
 
     private func showPanel(for c: Candidate) {
+        AXUIElementSetMessagingTimeout(c.window.element, 0.3) // main thread: a hung app must not freeze us
         let screens = TilingScreens.snapshot()
         guard let screen = TilingScreens.screen(containing: CGPoint(x: c.button.midX, y: c.button.midY), in: screens),
               let winFrame = TilingAX.frame(c.window.element) else { return }

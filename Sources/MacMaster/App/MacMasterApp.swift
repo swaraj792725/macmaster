@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import ApplicationServices
 
 @main
 struct MacMasterApp: App {
@@ -14,6 +15,13 @@ struct MacMasterApp: App {
         .windowToolbarStyle(.unified)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            // ⌘Q only closes the app's windows: menu bar icons, hotkeys, mouse and tiling keep running.
+            CommandGroup(replacing: .appTermination) {
+                Button("Quit MacMaster") { MainWindow.sendToBackground() }
+                    .keyboardShortcut("q", modifiers: .command)
+                Button("Quit MacMaster Completely") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q", modifiers: [.command, .option])
+            }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") {
                     Task { await UpdateChecker.shared.check(userInitiated: true) }
@@ -51,6 +59,9 @@ struct MacMasterApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         ExceptionTripwire.install()
+        // Default AX timeout for every element without its own (system default is 6s): a hung app must
+        // not freeze whichever feature happens to ask it something.
+        AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 1.0)
         let hideDock = UserDefaults.standard.bool(forKey: "mm.app.hideDockIcon")
         NSApp.setActivationPolicy(hideDock ? .accessory : .regular)
         if !Onboarding.isNeeded { Notifier.requestAuthorization() }
@@ -69,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Reopen the main window when the Dock icon is clicked with no windows open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if !flag { MainWindow.show() }
+        if !flag { MainWindow.show() } else { MainWindow.restoreDockPolicy() }
         return true
     }
 
@@ -154,7 +165,9 @@ struct AppSettingsView: View {
                 }
                 .onChange(of: showMenuBarIcon) { _, _ in MainStatusItem.shared.update() }
             } header: { Text("General") } footer: {
-                Text("Hide the Dock icon to run MacMaster from the menu bar only.")
+                Text(AppleItemRedirect.shared.replacesControlCenterIcon
+                     ? "Hide the Dock icon to run MacMaster from the menu bar only. Apple's Control Center opens MacMaster's dropdown, so MacMaster's own menu bar icon stays hidden while that's on."
+                     : "Hide the Dock icon to run MacMaster from the menu bar only.")
             }
             Section {
                 settingRow("Check for updates automatically", "arrow.triangle.2.circlepath", Theme.Palette.green) {

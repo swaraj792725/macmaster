@@ -135,12 +135,12 @@ final class TilingEngine {
             hotkeysRegistered = wantHotkeys
         }
 
+        // Poll stays on while enabled: catches permission granted *and* revoked, and a dead drag tap.
+        startPoll()
         guard accessibilityGranted else {
             stopAXFeatures()
-            startPoll()
             return
         }
-        stopPoll()
 
         toggle(TilingSettings.snapEnabled, TilingSnapController.shared.isRunning,
                TilingSnapController.shared.start, TilingSnapController.shared.stop)
@@ -153,6 +153,10 @@ final class TilingEngine {
 
         if TilingSettings.modDragEnabled {
             let flags = TilingSettings.modDragModifier.flags
+            if let tap = modTap, !tap.isEnabled {
+                tap.stop()
+                modTap = nil
+            }
             if let tap = modTap {
                 tap.setModifier(flags)
             } else {
@@ -190,7 +194,8 @@ final class TilingEngine {
         let t = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                if AXIsProcessTrusted() { self.reconfigure() } else { self.accessibilityGranted = false }
+                let ax = AXIsProcessTrusted()
+                if ax != self.accessibilityGranted || (ax && TilingSettings.modDragEnabled && self.modTap?.isEnabled != true) { self.reconfigure() }
             }
         }
         RunLoop.main.add(t, forMode: .common)

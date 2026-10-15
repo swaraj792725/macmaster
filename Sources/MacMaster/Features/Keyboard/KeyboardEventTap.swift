@@ -170,8 +170,10 @@ final class KeyboardMainTap: @unchecked Sendable {
         guard runner == nil else { return true }
         let r = KeyboardTapRunner(name: "MacMaster.KeyboardTap",
                                   types: [.keyDown, .keyUp, .flagsChanged],
-                                  onDisabled: { [unowned self] in resetState() },
-                                  handler: { [unowned self] type, event in handle(type, event) })
+                                  onDisabled: { [weak self] in self?.resetState() },
+                                  handler: { [weak self] type, event in
+                                      self?.handle(type, event) ?? Unmanaged.passUnretained(event)
+                                  })
         guard r.start() else { return false }
         runner = r
         return true
@@ -342,11 +344,15 @@ final class KeyboardCleaningTap: @unchecked Sendable {
                     .otherMouseDown, .otherMouseUp, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
                     .mouseMoved, .scrollWheel],
             extraRawTypes: [14, 29, 30, 31, 32, 34],
-            handler: { [unowned self] type, event in handle(type, event) })
+            handler: { [weak self] type, event in
+                self?.handle(type, event) ?? Unmanaged.passUnretained(event)
+            })
         guard r.start() else { return false }
         runner = r
         return true
     }
+
+    var isEnabled: Bool { runner?.isEnabled ?? false }
 
     func stop() {
         runner?.stop()

@@ -21,7 +21,7 @@ struct MouseIllustration: View {
     private let h: CGFloat = 230
 
     var body: some View {
-        TimelineView(MouseActivitySchedule(fast: 1.0 / 20, idleAfter: 0.5)) { _ in
+        TimelineView(MouseActivitySchedule(fast: 1.0 / 20, idleAfter: 0.5, idleInterval: 0.5)) { _ in
             let pressed = Self.pressedButtons()
             ZStack(alignment: .top) {
                 // Body

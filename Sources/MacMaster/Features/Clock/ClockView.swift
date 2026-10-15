@@ -34,9 +34,11 @@ struct ClockView: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Show in menu bar").font(.headline)
-                Text(settings.showInMenuBar ? "Click the time to open the calendar, world clocks and time controls."
-                                            : "Off by default so you don't get a second clock until you want one.")
-                    .font(.callout).foregroundStyle(.secondary)
+                Text(AppleItemRedirect.shared.replacesClockIcon
+                     ? "Apple's clock opens this Clock (Control Center & Clock page), so MacMaster's own clock is hidden to avoid a second one."
+                     : settings.showInMenuBar ? "Click the time to open the calendar, world clocks and time controls."
+                                              : "Off by default so you don't get a second clock until you want one.")
+                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Toggle("", isOn: $settings.showInMenuBar).toggleStyle(.switch).labelsHidden().controlSize(.large)

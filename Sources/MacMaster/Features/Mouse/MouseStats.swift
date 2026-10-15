@@ -178,7 +178,8 @@ final class MouseTelemetry: @unchecked Sendable {
     var idleSeconds: Double {
         let t = Self.now()
         return state.withLock { s in
-            if s.buttons.last?.down == true { return 0 }
+            // A held button keeps the views live, but only briefly: a missed button-up must not pin them at full rate.
+            if let b = s.buttons.last, b.down, t - b.time < 3 { return 0 }
             let last = max(s.raw.last?.time ?? 0, s.smoothed.last?.time ?? 0, s.buttons.last?.time ?? 0)
             return t - last
         }
@@ -198,12 +199,14 @@ final class MouseTelemetry: @unchecked Sendable {
 struct MouseActivitySchedule: TimelineSchedule {
     var fast: Double
     var idleAfter: Double = 5
+    /// Redraw interval once idle: nothing moves then, so this only needs to notice new activity.
+    var idleInterval: Double = 1
 
     func entries(from start: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
         var t = start
         return AnyIterator {
             let idle = mode == .lowFrequency || MouseTelemetry.shared.idleSeconds > idleAfter
-            t = t.addingTimeInterval(idle ? 0.5 : fast)
+            t = t.addingTimeInterval(idle ? idleInterval : fast)
             return t
         }
     }

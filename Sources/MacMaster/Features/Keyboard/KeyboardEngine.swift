@@ -84,7 +84,8 @@ final class KeyboardEngine {
         hotkeyFailures = []
         KeyboardHotCorners.shared.stop()
         mappingWanted = false
-        KeyboardHyperMapper.restore(wait: true)
+        // Async: hidutil can be slow; the mapper's serial queue keeps a later apply() ordered after it.
+        KeyboardHyperMapper.restore(wait: false)
         hyperMapped = false
     }
 
@@ -107,6 +108,7 @@ final class KeyboardEngine {
 
     private func poll() {
         let ax = Permissions.isGranted(.accessibility)
+        if !ax { cleaning.stop() } // pointer stays frozen otherwise
         if ax != accessibilityGranted { reconcile(); return }
         if let tap, ax, !tap.isEnabled { // system disabled it for good: rebuild
             tap.stop(); self.tap = nil

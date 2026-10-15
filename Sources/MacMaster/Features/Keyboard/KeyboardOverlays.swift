@@ -168,6 +168,8 @@ final class KeyboardCleaningController {
     private func tick() {
         let now = DispatchTime.now().uptimeNanoseconds
         if now >= deadline { stop(); return }
+        // Tap gone (permission revoked, system killed it): input is no longer blocked, so leave the overlay.
+        if tap?.isEnabled != true { stop(); return }
         model.remaining = Int(((deadline - now) + 999_999_999) / 1_000_000_000)
         let hold = tap?.holdStart.withLock { $0 } ?? 0
         if hold != 0 {

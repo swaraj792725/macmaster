@@ -108,7 +108,7 @@ struct MouseScrollChart: View {
 
 struct MouseButtonReadout: View {
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+        TimelineView(MouseActivitySchedule(fast: 0.25, idleAfter: 6)) { _ in
             let snap = MouseTelemetry.shared.snapshot()
             VStack(alignment: .leading, spacing: 6) {
                 HStack {

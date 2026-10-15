@@ -38,6 +38,12 @@ final class TilingModifierDragTap: @unchecked Sendable {
 
     func setModifier(_ f: CGEventFlags) { modifier.withLock { $0 = f } }
 
+    /// False once the system disabled the tap for good (or it died): the engine rebuilds it.
+    var isEnabled: Bool {
+        guard let t = tap else { return false }
+        return CFMachPortIsValid(t) && CGEvent.tapIsEnabled(tap: t)
+    }
+
     func start() -> Bool {
         let ready = DispatchSemaphore(value: 0)
         let ok = OSAllocatedUnfairLock(initialState: false)

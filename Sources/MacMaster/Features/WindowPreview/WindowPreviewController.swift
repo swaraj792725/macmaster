@@ -68,6 +68,11 @@ final class WindowPreviewController: ObservableObject {
         let wantSwitcher = ax && s.switcherEnabled
         if wantSwitcher && !switcher.isRunning { switcherRunning = switcher.start() }
         if !wantSwitcher && switcher.isRunning { switcher.stop(); switcherRunning = false }
+        if wantSwitcher && switcher.isRunning && !switcher.isHealthy {
+            // Dead tap with ⌘Tab suppressed would leave no app switcher at all: rebuild it.
+            switcher.stop()
+            switcherRunning = switcher.start()
+        }
         if switcher.isRunning { switcher.syncSettings() }
     }
 }

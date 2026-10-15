@@ -19,21 +19,41 @@ enum Shell {
         let out = Pipe(), err = Pipe()
         p.standardOutput = out
         p.standardError = err
+        let exited = DispatchSemaphore(value: 0)
+        p.terminationHandler = { _ in exited.signal() }
         do { try p.run() } catch {
             return Result(status: -1, stdout: "", stderr: error.localizedDescription)
         }
         // Read before waiting so large outputs don't deadlock on a full pipe.
-        var outData = Data(), errData = Data()
+        let outBuf = LockedData(), errBuf = LockedData()
         let group = DispatchGroup()
         group.enter()
-        DispatchQueue.global().async { outData = out.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        DispatchQueue.global().async { outBuf.set(out.fileHandleForReading.readDataToEndOfFile()); group.leave() }
         group.enter()
-        DispatchQueue.global().async { errData = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
-        if group.wait(timeout: .now() + timeout) == .timedOut { p.terminate() }
-        p.waitUntilExit()
-        return Result(status: p.terminationStatus,
-                      stdout: String(decoding: outData, as: UTF8.self),
-                      stderr: String(decoding: errData, as: UTF8.self))
+        DispatchQueue.global().async { errBuf.set(err.fileHandleForReading.readDataToEndOfFile()); group.leave() }
+        // Every wait is bounded: a stuck child (or a grandchild holding the pipe) must not hang the caller.
+        let deadline = DispatchTime.now() + timeout
+        var timedOut = group.wait(timeout: deadline) == .timedOut
+        if !timedOut { timedOut = exited.wait(timeout: deadline) == .timedOut }
+        if timedOut {
+            p.terminate()
+            if exited.wait(timeout: .now() + 2) == .timedOut {
+                kill(p.processIdentifier, SIGKILL)
+                _ = exited.wait(timeout: .now() + 1)
+            }
+            _ = group.wait(timeout: .now() + 1)
+        }
+        return Result(status: p.isRunning ? -1 : p.terminationStatus,
+                      stdout: String(decoding: outBuf.get(), as: UTF8.self),
+                      stderr: String(decoding: errBuf.get(), as: UTF8.self))
+    }
+
+    /// Reader threads may still write after a timeout, so the buffer is lock-guarded.
+    private final class LockedData: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+        func set(_ d: Data) { lock.lock(); data = d; lock.unlock() }
+        func get() -> Data { lock.lock(); defer { lock.unlock() }; return data }
     }
 
     static func runAsync(_ executable: String, _ args: [String] = [], timeout: TimeInterval = 60) async -> Result {

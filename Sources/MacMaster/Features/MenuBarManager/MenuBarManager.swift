@@ -182,6 +182,10 @@ final class MenuBarManager {
             NSStatusBar.system.removeStatusItem(it)
         }
         toggleItem = nil; dividerItem = nil; alwaysHiddenItem = nil
+        // A teardown mid-click or mid-drag must not leave these stuck on (auto-rehide would never run again).
+        interacting = false
+        isMoving = false
+        iconCache.removeAll()
         isRunning = false
         isCollapsed = false
         state = .expanded
@@ -604,6 +608,8 @@ final class MenuBarManager {
     func icon(for pid: pid_t) -> NSImage? {
         if let i = iconCache[pid] { return i }
         guard let path = RunningAppCache.shared[pid]?.bundlePath else { return nil }
+        // Pids of quit apps pile up (and get reused); drop entries no longer running.
+        if iconCache.count > 64 { iconCache = iconCache.filter { RunningAppCache.shared[$0.key] != nil } }
         let i = NSWorkspace.shared.icon(forFile: path)
         iconCache[pid] = i
         return i

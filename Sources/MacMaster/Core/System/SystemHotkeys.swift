@@ -39,7 +39,17 @@ enum SystemHotkeys {
     private static let setValue = sym("CGSSetSymbolicHotKeyValue", SetValueFn.self)
 
     private static let lock = NSLock()
-    private static var restoreWork: [Int32: DispatchWorkItem] = [:]
+    /// A pending restore keeps the user's original settings, so a second post before it runs doesn't
+    /// mistake our temporary binding for theirs.
+    private struct Pending {
+        let token: UInt64
+        let work: DispatchWorkItem
+        let equiv: UInt16
+        let wasEnabled: Bool
+        let unbound: Bool
+    }
+    private static var restoreWork: [Int32: Pending] = [:]
+    private static var nextToken: UInt64 = 0
 
     /// Returns false when the private API is missing (caller should fall back).
     @discardableResult
@@ -48,14 +58,15 @@ enum SystemHotkeys {
         let hk = id.rawValue
         var equiv: UInt16 = 0, code: UInt16 = 0
         var flags: UInt64 = 0
-        let err = getValue(hk, &equiv, &code, &flags)
-        let wasEnabled = isEnabled(hk)
-        let unbound = err != 0 || code == UInt16.max || code >= 400
-
         lock.lock()
-        let pendingRestore = restoreWork.removeValue(forKey: hk)
+        let pending = restoreWork.removeValue(forKey: hk)
         lock.unlock()
-        pendingRestore?.cancel()
+        pending?.work.cancel()
+
+        let err = getValue(hk, &equiv, &code, &flags)
+        let wasEnabled = pending?.wasEnabled ?? isEnabled(hk)
+        let unbound = pending?.unbound ?? (err != 0 || code == UInt16.max || code >= 400)
+        if let pending { equiv = pending.equiv }
 
         if !wasEnabled { _ = setEnabled(hk, true) }
         if unbound {
@@ -79,12 +90,24 @@ enum SystemHotkeys {
 
         if !wasEnabled || unbound {
             // Put the user's settings back once the system has handled the key.
+            lock.lock()
+            nextToken &+= 1
+            let token = nextToken
+            lock.unlock()
+            let savedEquiv = equiv
             let work = DispatchWorkItem {
-                if unbound { _ = setValue(hk, equiv, UInt16.max, 0) }
+                // Skip if a newer post took over; it carries the originals forward.
+                lock.lock()
+                let mine = restoreWork[hk]?.token == token
+                if mine { restoreWork[hk] = nil }
+                lock.unlock()
+                guard mine else { return }
+                if unbound { _ = setValue(hk, savedEquiv, UInt16.max, 0) }
                 if !wasEnabled { _ = setEnabled(hk, false) }
-                lock.lock(); restoreWork[hk] = nil; lock.unlock()
             }
-            lock.lock(); restoreWork[hk] = work; lock.unlock()
+            lock.lock()
+            restoreWork[hk] = Pending(token: token, work: work, equiv: savedEquiv, wasEnabled: wasEnabled, unbound: unbound)
+            lock.unlock()
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.3, execute: work)
         }
         return true

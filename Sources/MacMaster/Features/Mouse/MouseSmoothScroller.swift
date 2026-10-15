@@ -1,6 +1,5 @@
 import Foundation
 import CoreGraphics
-import CoreVideo
 import os
 
 /// Turns discrete wheel impulses into smooth, inertial, pixel-precise scrolling.
@@ -11,8 +10,11 @@ import os
 /// exponential ease-out. With inertia on, once the wheel stops the glide continues as a real
 /// momentum phase (like a trackpad flick).
 ///
-/// Threading: `add` is called on the tap thread, `step` on the display-link thread; shared state sits
-/// behind an unfair lock and events are posted outside the lock.
+/// Threading: `add` is called on the tap thread; `step` and all ticker management run on `tickQueue`.
+/// Shared state sits behind an unfair lock and events are posted outside the lock.
+///
+/// The ticker is a plain dispatch timer, not a CVDisplayLink: a display link silently stops firing after
+/// sleep/wake or a display change, which left the glide stuck "active" and every wheel tick swallowed.
 final class MouseSmoothScroller: @unchecked Sendable {
     struct Params: Sendable {
         var tau: Double
@@ -53,11 +55,14 @@ final class MouseSmoothScroller: @unchecked Sendable {
     private static let maxRemaining = 8000.0
     private static let idleGap = 0.11          // seconds without wheel input → hand over to momentum
     private static let tauUp = 0.035           // soft-start time constant
+    private static let frameInterval = 1.0 / 120
+    /// Animating but no frame for this long → the ticker is dead; drop the glide and let the wheel through.
+    private static let stallGap = 0.5
 
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let source = CGEventSource(stateID: .privateState)
-    private let linkQueue = DispatchQueue(label: "mm.mouse.scroll.link", qos: .userInteractive)
-    private var link: CVDisplayLink?
+    private let tickQueue = DispatchQueue(label: "mm.mouse.scroll.tick", qos: .userInteractive)
+    private var ticker: DispatchSourceTimer?   // tickQueue only
     private let stats = MouseStatsStore.shared
     private let telemetry = MouseTelemetry.shared
 
@@ -65,10 +70,19 @@ final class MouseSmoothScroller: @unchecked Sendable {
 
     // MARK: Input (tap thread)
 
-    func add(dy: Double, dx: Double, flags: CGEventFlags, params: Params) {
+    /// Returns false when the animator was found stalled: it has been reset and restarted, and the caller
+    /// should pass this tick through unsmoothed so the wheel never goes dead.
+    @discardableResult
+    func add(dy: Double, dx: Double, flags: CGEventFlags, params: Params) -> Bool {
         let now = Self.now()
-        var needsLink = false
+        var needsTicker = false
+        var stalled = false
         state.withLockUnchecked { s in
+            if s.phase != .idle, now - s.lastStep > Self.stallGap {
+                s = State()
+                stalled = true
+                return
+            }
             s.tau = params.tau
             s.inertia = params.inertia
             if dy != 0 {
@@ -86,7 +100,7 @@ final class MouseSmoothScroller: @unchecked Sendable {
                 s.phase = .active
                 s.began = false
                 s.lastStep = now
-                needsLink = true
+                needsTicker = true
             case .momentum:
                 s.pendingMomentumEnd = s.momentumBegan
                 s.momentumBegan = false
@@ -96,45 +110,46 @@ final class MouseSmoothScroller: @unchecked Sendable {
                 break
             }
         }
-        if needsLink { ensureLinkRunning() }
+        if stalled {
+            tickQueue.async { [self] in
+                ticker?.cancel()
+                ticker = nil
+            }
+            return false
+        }
+        if needsTicker { ensureTickerRunning() }
+        return true
     }
 
     func shutdown() {
-        linkQueue.sync {
-            if let l = link {
-                CVDisplayLinkStop(l)
-                link = nil
-            }
+        tickQueue.sync {
+            ticker?.cancel()
+            ticker = nil
         }
         state.withLock { $0 = State() }
     }
 
-    // MARK: Display link
+    // MARK: Ticker
 
-    private func ensureLinkRunning() {
-        linkQueue.async { [self] in
-            if link == nil {
-                var l: CVDisplayLink?
-                guard CVDisplayLinkCreateWithActiveCGDisplays(&l) == kCVReturnSuccess, let l else { return }
-                CVDisplayLinkSetOutputCallback(l, { _, _, _, _, _, ctx in
-                    guard let ctx else { return kCVReturnError }
-                    Unmanaged<MouseSmoothScroller>.fromOpaque(ctx).takeUnretainedValue().step()
-                    return kCVReturnSuccess
-                }, Unmanaged.passUnretained(self).toOpaque())
-                link = l
-            }
-            if let l = link, !CVDisplayLinkIsRunning(l) { CVDisplayLinkStart(l) }
+    private func ensureTickerRunning() {
+        tickQueue.async { [self] in
+            guard ticker == nil else { return }
+            let t = DispatchSource.makeTimerSource(flags: .strict, queue: tickQueue)
+            t.schedule(deadline: .now(), repeating: Self.frameInterval, leeway: .microseconds(500))
+            t.setEventHandler { [weak self] in self?.step() }
+            t.resume()
+            ticker = t
         }
     }
 
-    private func stopLinkIfIdle() {
-        linkQueue.async { [self] in
-            let idle = state.withLock { $0.phase == .idle }
-            if idle, let l = link, CVDisplayLinkIsRunning(l) { CVDisplayLinkStop(l) }
-        }
+    /// On tickQueue. A tick that raced in after this check restarts the ticker via `ensureTickerRunning`.
+    private func stopTickerIfIdle() {
+        guard state.withLock({ $0.phase == .idle }) else { return }
+        ticker?.cancel()
+        ticker = nil
     }
 
-    // MARK: Frame step (display-link thread)
+    // MARK: Frame step (tickQueue)
 
     private func step() {
         let now = Self.now()
@@ -220,7 +235,7 @@ final class MouseSmoothScroller: @unchecked Sendable {
             let loc = CGEvent(source: nil)?.location ?? .zero
             for o in outs { post(o, flags: flags, location: loc) }
         }
-        if becameIdle { stopLinkIfIdle() }
+        if becameIdle { stopTickerIfIdle() }
     }
 
     private func post(_ o: Out, flags: CGEventFlags, location: CGPoint) {
