@@ -23,6 +23,8 @@ struct MouseView: View {
 
             statsRow
 
+            MouseClicksSection()
+
             Group {
                 scrollingCard.searchAnchor("mouse.scrolling")
                 buttonsCard.searchAnchor("mouse.buttons")
