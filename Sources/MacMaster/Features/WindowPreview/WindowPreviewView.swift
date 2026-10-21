@@ -22,6 +22,7 @@ struct WindowPreviewView: View {
             switcherSection.searchAnchor("windows.switcher")
             keysSection.searchAnchor("windows.keys")
             dockSection.searchAnchor("windows.dock")
+            WindowBehaviorSection()
         }
         .onAppear { WindowPreviewController.shared.start() }
     }
