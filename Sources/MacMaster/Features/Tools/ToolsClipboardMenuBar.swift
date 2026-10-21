@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import ImageIO
 
 /// Menu bar icon for clipboard history. Click opens a popover with search, pins and quick copy/paste.
 @MainActor
@@ -60,56 +59,13 @@ final class ToolsClipboardMenuBar: NSObject, NSPopoverDelegate {
     }
 
     /// Copies, then sends ⌘V to the app that was frontmost (needs Accessibility; otherwise just copies).
-    func paste(_ item: ToolsClipboardItem) {
-        ToolsClipboard.shared.copyBack(item)
-        guard AXIsProcessTrusted() else {
-            close()
-            _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
-            return
-        }
-        let target = previousApp ?? FrontAppTracker.lastExternal
-        // Take over focus handling from the popover so it doesn't race us.
-        FrontAppTracker.markDeliberate()
+    func paste(_ item: ToolsClipboardItem, plain: Bool? = nil) {
+        let target = previousApp
         close()
-        guard let target, !FrontAppTracker.isSelf(target) else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { Self.sendCommandV() }
-            return
-        }
-        FrontAppTracker.activate(target) { Self.sendCommandV() }
+        ToolsClipboard.shared.paste(item, plain: plain, into: target)
     }
 
-    static var canPaste: Bool { AXIsProcessTrusted() }
-
-    private static func sendCommandV() {
-        let src = CGEventSource(stateID: .combinedSessionState)
-        for down in [true, false] {
-            let e = CGEvent(keyboardEventSource: src, virtualKey: 9, keyDown: down)
-            e?.flags = .maskCommand
-            e?.post(tap: .cghidEventTap)
-        }
-    }
-}
-
-// MARK: - Thumbnails
-
-@MainActor
-private enum ToolsClipboardThumbs {
-    private static let cache = NSCache<NSUUID, NSImage>()
-
-    static func image(for item: ToolsClipboardItem, data: Data) -> NSImage? {
-        let key = item.id as NSUUID
-        if let c = cache.object(forKey: key) { return c }
-        let opts: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 160,
-        ]
-        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
-              let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
-        let img = NSImage(cgImage: cg, size: NSSize(width: cg.width / 2, height: cg.height / 2))
-        cache.setObject(img, forKey: key)
-        return img
-    }
+    static var canPaste: Bool { Permissions.isGranted(.accessibility) }
 }
 
 // MARK: - Popover view
@@ -237,8 +193,9 @@ private struct ToolsClipboardPopoverRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            preview
+            ToolsClipboardPreview(item: item)
             Spacer(minLength: 4)
+            if item.pinned == false || hover { ToolsClipboardMeta(item: item) }
             if hover {
                 HStack(spacing: 8) {
                     Button { bar.copy(item) } label: { Image(systemName: "doc.on.doc") }
@@ -260,34 +217,16 @@ private struct ToolsClipboardPopoverRow: View {
             .fill(Color.primary.opacity(selected ? 0.12 : (hover ? 0.07 : 0))))
         .contentShape(Rectangle())
         .onHover { hover = $0 }
+        .contextMenu {
+            Button("Paste") { bar.paste(item) }
+            Button("Paste as plain text") { bar.paste(item, plain: true) }
+            Button("Copy") { bar.copy(item) }
+            Divider()
+            Button(item.pinned ? "Unpin" : "Pin") { clip.togglePin(item) }
+            Button("Delete", role: .destructive) { clip.remove(item) }
+        }
         .onTapGesture {
             if NSEvent.modifierFlags.contains(.option) || !ToolsClipboardMenuBar.canPaste { bar.copy(item) } else { bar.paste(item) }
-        }
-    }
-
-    @ViewBuilder
-    private var preview: some View {
-        switch item.kind {
-        case .text(let s):
-            Text(String(s.trimmingCharacters(in: .whitespacesAndNewlines).prefix(300)))
-                .font(.callout).lineLimit(2).multilineTextAlignment(.leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        case .image(let d):
-            HStack(spacing: 8) {
-                if let img = ToolsClipboardThumbs.image(for: item, data: d) {
-                    Image(nsImage: img).resizable().scaledToFill().frame(width: 52, height: 38)
-                        .clipShape(RoundedRectangle(cornerRadius: 5))
-                }
-                Text("Image").font(.callout).foregroundStyle(.secondary)
-            }
-        case .files(let urls):
-            HStack(spacing: 8) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: urls.first?.path ?? "")).resizable().frame(width: 26, height: 26)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(urls.prefix(2).map(\.lastPathComponent).joined(separator: ", ")).font(.callout).lineLimit(1)
-                    if urls.count > 2 { Text("+ \(urls.count - 2) more").font(.caption).foregroundStyle(.secondary) }
-                }
-            }
         }
     }
 }
