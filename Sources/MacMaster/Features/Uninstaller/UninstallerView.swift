@@ -54,6 +54,7 @@ struct UninstallerView: View {
         .onAppear { model.loadApps() }
         .onSearchTab { raw in
             if raw == "settings" { showSettings = true }
+            else if raw == "unused" { model.tab = .applications; model.filter = .unused }
             else if let t = UninstallerModel.Tab(rawValue: raw) { model.tab = t }
         }
     }

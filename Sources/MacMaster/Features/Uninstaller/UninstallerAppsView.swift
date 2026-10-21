@@ -39,6 +39,8 @@ struct UninstallerAppsView: View {
                 .controlSize(.small).menuStyle(.borderlessButton).fixedSize()
             }
 
+            if model.filter == .unused { UninstallerUnusedBar(model: model) }
+
             let apps = model.filteredApps
             if model.loadingApps && model.apps.isEmpty {
                 VStack(spacing: 10) { ProgressView(); Text("Finding apps…").foregroundStyle(.secondary) }
@@ -49,7 +51,11 @@ struct UninstallerAppsView: View {
             } else {
                 List(selection: Binding(get: { model.selectedAppID }, set: { model.selectApp($0) })) {
                     ForEach(apps) { app in
-                        UninstallerAppRow(app: app, running: model.isRunning(app)).tag(app.id)
+                        Group {
+                            if model.filter == .unused { UninstallerUnusedRow(model: model, app: app) }
+                            else { UninstallerAppRow(app: app, running: model.isRunning(app)) }
+                        }
+                        .tag(app.id)
                     }
                 }
                 .listStyle(.inset)
