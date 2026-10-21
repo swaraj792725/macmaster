@@ -217,8 +217,6 @@ extension AppSearchIndex {
         SearchEntry(.windows, crumb: "Window behavior", "Green button maximizes instead of full screen",
                     "zoom green traffic light fullscreen maximize fill option click", anchor: "windows.behavior"),
     ]
-    /// Clipboard upgrades (plain-text paste, link cleaning, auto-clear), added to the global search.
-    static let clipboardExtrasEntries: [SearchEntry] = []
     /// Cleaner project junk and Uninstaller unused-apps entries, added to the global search.
     static let devToolsEntries: [SearchEntry] = []
 }
