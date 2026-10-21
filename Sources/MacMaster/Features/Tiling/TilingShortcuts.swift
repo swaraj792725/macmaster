@@ -147,10 +147,10 @@ private let tilingHotkeyHandler: EventHandlerUPP = { _, event, _ in
     var hk = EventHotKeyID()
     let st = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                                nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
-    if st == noErr, hk.signature == tilingHotkeySignature {
-        let id = hk.id
-        DispatchQueue.main.async { MainActor.assumeIsolated { TilingHotkeys.shared.fire(id) } }
-    }
+    // Only consume our own hot keys so other features' Carbon hot keys keep working.
+    guard st == noErr, hk.signature == tilingHotkeySignature else { return OSStatus(eventNotHandledErr) }
+    let id = hk.id
+    DispatchQueue.main.async { MainActor.assumeIsolated { TilingHotkeys.shared.fire(id) } }
     return noErr
 }
 

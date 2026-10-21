@@ -7,10 +7,10 @@ private let keyboardHotkeyHandler: EventHandlerUPP = { _, event, _ in
     var hk = EventHotKeyID()
     let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                                    nil, MemoryLayout<EventHotKeyID>.size, nil, &hk)
-    if status == noErr, hk.signature == keyboardHotkeySignature {
-        let id = hk.id
-        DispatchQueue.main.async { MainActor.assumeIsolated { KeyboardHotkeys.shared.fire(id) } }
-    }
+    // Only consume our own hot keys so other features' Carbon hot keys keep working.
+    guard status == noErr, hk.signature == keyboardHotkeySignature else { return OSStatus(eventNotHandledErr) }
+    let id = hk.id
+    DispatchQueue.main.async { MainActor.assumeIsolated { KeyboardHotkeys.shared.fire(id) } }
     return noErr
 }
 
