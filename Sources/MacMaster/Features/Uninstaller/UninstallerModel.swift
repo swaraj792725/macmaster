@@ -18,7 +18,7 @@ final class UninstallerModel {
     }
 
     enum FilterKey: String, CaseIterable, Identifiable {
-        case all = "All apps", unused = "Unused 90+ days", large = "Large (500 MB+)"
+        case all = "All apps", unused = "Unused apps", large = "Large (500 MB+)"
         var id: String { rawValue }
     }
 
@@ -39,6 +39,7 @@ final class UninstallerModel {
     var filter: FilterKey = .all
     var selectedAppID: String?
     var runningPaths: Set<String> = []
+    var unusedSelection: Set<String> = []
 
     var mode: Mode = .uninstall
     var scanning = false
@@ -153,7 +154,9 @@ final class UninstallerModel {
         }
         switch filter {
         case .all: break
-        case .unused: list = list.filter { !$0.isSystem && ($0.daysSinceUsed ?? Int.max) >= 90 }
+        case .unused:
+            let days = UninstallerSettings.unusedDays
+            list = list.filter { Self.isUnused($0, days: days) }
         case .large: list = list.filter { ($0.size ?? 0) >= 500_000_000 }
         }
         switch sort {
@@ -400,6 +403,12 @@ final class UninstallerModel {
         if plan.source == .app, let app = plan.app, gone.contains(app.url.path) {
             apps.removeAll { $0.id == app.id }
             if selectedAppID == app.id { selectedAppID = nil; items = []; selection = [] }
+        }
+        // Bulk removal of unused apps: drop the removed app bundles from the list.
+        if plan.source == .hunter, plan.items.contains(where: { $0.category == .application }) {
+            apps.removeAll { gone.contains($0.id) }
+            unusedSelection.subtract(gone)
+            if let id = selectedAppID, gone.contains(id) { selectedAppID = nil; items = []; selection = [] }
         }
         summary = r
         isRemoving = false
