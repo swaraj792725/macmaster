@@ -4,6 +4,30 @@ All notable changes to MacMaster are listed here. Versions follow [Semantic Vers
 The app reads this file for its "What's New" window, so keep the format: `## [x.y.z] - YYYY-MM-DD`,
 then `### Group` headings with `- ` bullets.
 
+## [0.5.0] - 2026-10-21
+
+### Added
+- **Command Bar.** A floating launcher (⌥Space once you turn it on) for apps, MacMaster pages and settings, system actions, a calculator, unit conversions, clipboard history, snippets, System Settings panes, files and web search. Results you pick often move up.
+- **Sound.** Switch output and input devices, set volume and mute, see sample rates, and rank devices so MacMaster switches to the best one when headphones or AirPods connect. Speakers can come up muted when headphones are unplugged. Mic mute shortcut, a live input level meter and an optional menu bar item.
+- **Capture.** Copy text from anything on screen (OCR), scan QR and barcodes, pick colors (HEX, RGB, HSL, SwiftUI) with a contrast check, and take region screenshots that can be pinned above other windows. Each has its own shortcut.
+- **App Updates.** One list of updates for apps that use Sparkle, the App Store and Homebrew, with release notes, ignore rules and one-click Homebrew updates.
+- **Toolbox: Timer & Stopwatch.** Timers, Pomodoro and a stopwatch with a menu bar countdown. Running timers survive a relaunch.
+- **Toolbox: Notes.** Markdown notes saved as plain .md files, with checklists and a floating note you can toggle with a shortcut, also over full-screen apps.
+- **Toolbox: Teleprompter.** A notch-pinned or floating prompter that is hidden from screen sharing and recordings. It can scroll at a fixed speed or follow your voice.
+- **Toolbox: Dictation.** Hold a shortcut, speak, release: the text is typed into the app in front. Recognition stays on this Mac when the language supports it.
+- **Toolbox: Privacy Guard.** Uses the camera to notice when you walk away or someone looks over your shoulder, then blurs the screen or locks the Mac.
+- **Toolbox: Disk Map and Port Manager.** A treemap of what fills a folder or disk, and a list of listening ports with the process behind each one and a Kill button.
+- **Clipboard.** Ignore password managers and chosen apps, clear the clipboard after a set time, paste as plain text, strip tracking parameters from copied links, and a quick paste panel with search and ⌘1–9.
+- **Cleaner: Projects.** Finds node_modules, build folders, virtual environments and other rebuildable folders in projects you haven't touched for a while.
+- **Uninstaller: Unused apps.** Lists apps you haven't opened in a chosen number of days and how much space they use.
+- **Mouse and windows.** Click debounce for worn mice that double-click by themselves, click a Dock icon to minimize its app, quit an app when its last window closes (with a keep-open list), and make the green button fill the screen instead of entering full screen.
+- Dashboard tiles for App Updates, Sound, Command Bar and Capture, with live status.
+
+### Changed
+- Every new feature is off until you turn it on, and asks for a permission only then. Nothing new runs in the background while it is off.
+- Global shortcuts from different features no longer take each other's key presses.
+- Sound priority puts real external devices first, then built-in, then virtual devices (Teams, Zoom, Continuity) last.
+
 ## [0.4.5] - 2026-10-16
 
 ### Added

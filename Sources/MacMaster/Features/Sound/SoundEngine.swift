@@ -402,23 +402,51 @@ final class SoundEngine {
     private func recordKnown(_ list: [SoundDevice]) {
         var k = known, out = priorityOut, inn = priorityIn
         var changed = false
-        // External devices go ahead of built-in ones the first time they are seen.
-        for d in list.sorted(by: { ($0.transport == .builtIn ? 1 : 0) < ($1.transport == .builtIn ? 1 : 0) }) {
+        // First time a device is seen: real external devices go ahead of built-in ones; virtual, aggregate and
+        // unknown ones (Teams Audio, an iPhone's Continuity mic) go last so auto-switch never jumps to them.
+        if Self.demoteSoftDevicesOnce(&out, &inn, known: k) { changed = true }
+        for d in list.sorted(by: { Self.tier(d: $0) < Self.tier(d: $1) }) {
             let info = SoundKnownDevice(name: d.name, transport: d.transport.rawValue, hasOutput: d.isOutput || (k[d.uid]?.hasOutput ?? false),
                                         hasInput: d.isInput || (k[d.uid]?.hasInput ?? false), isAirPods: d.isAirPods)
             if k[d.uid] != info { k[d.uid] = info; changed = true }
-            if d.isOutput, !out.contains(d.uid) { insertNew(d.uid, into: &out, builtIn: d.transport == .builtIn, known: k); changed = true }
-            if d.isInput, !inn.contains(d.uid) { insertNew(d.uid, into: &inn, builtIn: d.transport == .builtIn, known: k); changed = true }
+            if d.isOutput, !out.contains(d.uid) { insertNew(d.uid, into: &out, tier: Self.tier(d: d), known: k); changed = true }
+            if d.isInput, !inn.contains(d.uid) { insertNew(d.uid, into: &inn, tier: Self.tier(d: d), known: k); changed = true }
         }
         guard changed else { return }
         known = k; priorityOut = out; priorityIn = inn
         savePriority()
     }
 
-    private func insertNew(_ uid: String, into list: inout [String], builtIn: Bool, known: [String: SoundKnownDevice]) {
-        if builtIn { list.append(uid); return }
-        let firstBuiltIn = list.firstIndex { known[$0]?.transport == SoundTransport.builtIn.rawValue }
-        list.insert(uid, at: firstBuiltIn ?? list.endIndex)
+    /// 0 = real external device, 1 = built-in, 2 = virtual / aggregate / unknown transport.
+    private static func tier(_ t: SoundTransport?) -> Int {
+        switch t {
+        case .builtIn: 1
+        case .virtual, .aggregate, .other, nil: 2
+        default: 0
+        }
+    }
+    private static func tier(d: SoundDevice) -> Int { tier(d.transport) }
+    private static func tier(uid: String, _ known: [String: SoundKnownDevice]) -> Int {
+        tier(known[uid].flatMap { SoundTransport(rawValue: $0.transport) })
+    }
+
+    /// New devices go after every saved device of the same or a better tier.
+    private func insertNew(_ uid: String, into list: inout [String], tier: Int, known: [String: SoundKnownDevice]) {
+        let at = list.firstIndex { Self.tier(uid: $0, known) > tier }
+        list.insert(uid, at: at ?? list.endIndex)
+    }
+
+    /// Lists saved before soft devices were ranked last: move them to the end once, keeping the user's order otherwise.
+    private static func demoteSoftDevicesOnce(_ out: inout [String], _ inn: inout [String], known: [String: SoundKnownDevice]) -> Bool {
+        let key = "mm.sound.priority.softLast"
+        guard !UserDefaults.standard.bool(forKey: key) else { return false }
+        UserDefaults.standard.set(true, forKey: key)
+        func fix(_ l: [String]) -> [String] {
+            l.filter { tier(uid: $0, known) < 2 } + l.filter { tier(uid: $0, known) == 2 }
+        }
+        let (o, i) = (fix(out), fix(inn))
+        defer { out = o; inn = i }
+        return o != out || i != inn
     }
 
     private func savePriority() {

@@ -87,6 +87,9 @@ struct ToolsView: View {
     private let awake = ToolsKeepAwake.shared
     private let clipboard = ToolsClipboard.shared
 
+    /// `initial` opens straight into one tool (dev snapshots).
+    init(initial: ToolsTool? = nil) { _selected = State(initialValue: initial) }
+
     var body: some View {
         ZStack {
             if let tool = selected {

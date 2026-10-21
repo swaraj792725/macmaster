@@ -7,7 +7,8 @@
 **One free, native app for cleaning, monitoring and tuning your Mac.**
 
 Cleaner · Uninstaller · Optimizer · System Stats · Health Monitor · Battery & charge limit · Power ·
-Mouse · Keyboard · Window Switcher · Window Tiling · Menu Bar · Clock · Toolbox
+Mouse · Keyboard · Window Switcher · Window Tiling · Menu Bar · Clock · Command Bar · Sound ·
+Capture & OCR · App Updates · Dictation · Teleprompter · Notes · Timers · Privacy Guard · Toolbox
 
 [**Download the latest release**](https://github.com/swaraj792725/macmaster/releases/latest) ·
 macOS 14 Sonoma or later · Apple Silicon ·
@@ -75,6 +76,23 @@ aging when your Mac lives on the charger.
 
 Also included: Wi-Fi details with network automations and Instant Hotspot, and a Drop Shelf for files you drag around.
 
+### New in 0.5: launcher, sound, capture and more
+
+| | |
+|---|---|
+| **Command Bar** | Press ⌥Space for apps, MacMaster pages and settings, system actions, a calculator, unit conversions, clipboard, snippets, System Settings panes, files and web search. |
+| **Sound** | Switch output and input devices, rank them so the best connected one is used automatically, keep speakers muted when headphones are unplugged, mute the mic with a shortcut, and watch a live input meter. |
+| **Capture** | Copy text from anything on screen (OCR), scan QR codes and barcodes, pick colors with a contrast check, and pin screenshots above other windows. |
+| **App Updates** | One list of available updates for Sparkle, App Store and Homebrew apps, with release notes and ignore rules. |
+| **Dictation** | Hold a shortcut, speak, release, and the text is typed into the app in front. On-device where the language allows. |
+| **Teleprompter** | A notch or floating prompter that is hidden from screen sharing and can follow your voice. |
+| **Notes · Timers** | Markdown notes with a floating note panel; timers, Pomodoro and a stopwatch with a menu bar countdown. |
+| **Privacy Guard** | Blurs the screen or locks the Mac when you walk away or someone else looks at it. Uses the camera on-device only. |
+| **Developer tools** | Disk Map treemap, Port Manager, project junk in Cleaner (node_modules, build folders, venvs) and unused apps in the Uninstaller. |
+| **Clipboard & windows** | Clipboard privacy filters, auto-clear, plain-text paste, link cleaning and a quick paste panel; click debounce, Dock-click minimize, quit on last window and green-button maximize. |
+
+Every new feature is off until you turn it on.
+
 ---
 
 ## Install
@@ -100,8 +118,11 @@ MacMaster asks for a permission only when you turn on a feature that needs it.
 | Permission | Used by |
 |---|---|
 | **Full Disk Access** | Cleaner, Uninstaller and Leftover Hunter, to see containers and protected Library folders |
-| **Accessibility** | Mouse, Keyboard, Window Switcher, Window Tiling, hung-app detection |
-| **Screen Recording** | Window thumbnails in the switcher and Dock previews |
+| **Accessibility** | Mouse, Keyboard, Window Switcher, Window Tiling, hung-app detection, window extras, Dictation and Command Bar typing, clipboard paste panel |
+| **Screen Recording** | Window thumbnails in the switcher and Dock previews, Capture (OCR, QR, color picker, screenshots) |
+| **Microphone** | Sound level meter, Dictation, Teleprompter voice pacing |
+| **Speech Recognition** | Dictation, Teleprompter voice pacing |
+| **Camera** | Privacy Guard |
 | **Location** | Wi-Fi rules that match a network by name (macOS hides network names without it) |
 | **Calendars** | Upcoming events in the menu bar clock |
 

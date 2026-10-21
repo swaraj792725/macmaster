@@ -155,7 +155,7 @@ enum SoundHAL {
         return AudioObjectIsPropertySettable(id, &a, &settable) == noErr && settable.boolValue
     }
 
-    static func read<T>(_ id: AudioObjectID, _ sel: AudioObjectPropertySelector,
+    static func read<T: BitwiseCopyable>(_ id: AudioObjectID, _ sel: AudioObjectPropertySelector,
                         scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
                         element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain, zero: T) -> T? {
         var a = address(sel, scope, element)
@@ -167,7 +167,7 @@ enum SoundHAL {
     }
 
     @discardableResult
-    static func write<T>(_ id: AudioObjectID, _ sel: AudioObjectPropertySelector,
+    static func write<T: BitwiseCopyable>(_ id: AudioObjectID, _ sel: AudioObjectPropertySelector,
                          scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
                          element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain, value: T) -> OSStatus {
         var a = address(sel, scope, element)

@@ -31,6 +31,14 @@ enum DebugSnapshot {
                     await captureTall(s, height: h, dark: dark,
                                       to: URL(fileURLWithPath: dir).appendingPathComponent("\(s.rawValue)-tall.png"))
                 }
+                // MM_SNAPSHOT_TOOLS=all (or ids): also render each Toolbox tool's own page.
+                if let t = ProcessInfo.processInfo.environment["MM_SNAPSHOT_TOOLS"] {
+                    let ids = t == "all" ? nil : Set(t.split(separator: ",").map(String.init))
+                    for tool in ToolsTool.allCases where ids?.contains(tool.rawValue) ?? true {
+                        await captureTall(AnyView(ToolsView(initial: tool)), height: h, dark: dark,
+                                          to: URL(fileURLWithPath: dir).appendingPathComponent("tool-\(tool.rawValue).png"))
+                    }
+                }
                 if ProcessInfo.processInfo.environment["MM_SNAPSHOT_QUIT"] != nil { NSApp.terminate(nil) }
                 return
             }
@@ -84,8 +92,12 @@ enum DebugSnapshot {
     }
 
     static func captureTall(_ section: AppSection, height: CGFloat, dark: Bool, to url: URL) async {
+        await captureTall(AnyView(section.view), height: height, dark: dark, to: url)
+    }
+
+    static func captureTall(_ content: AnyView, height: CGFloat, dark: Bool, to url: URL) async {
         let size = NSSize(width: 940, height: height)
-        let root = section.view
+        let root = content
             .frame(width: size.width, height: size.height)
             .background(Color(nsColor: .windowBackgroundColor))
             .environment(\.colorScheme, dark ? .dark : .light)

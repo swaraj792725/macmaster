@@ -39,7 +39,7 @@ struct ToolsDictationView: View {
                 textSection
                 trySection
                 historySection
-                Text("Audio is processed on your Mac and never saved. The microphone is open only while you hold the shortcut. Transcripts below stay in memory and disappear when you quit MacMaster.")
+                Text("Audio is processed on your Mac and never saved. The microphone is open only while you hold the shortcut. Recent transcripts stay in memory and disappear when you quit MacMaster.")
                     .font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 4)
             }
             .padding(Theme.pagePadding)

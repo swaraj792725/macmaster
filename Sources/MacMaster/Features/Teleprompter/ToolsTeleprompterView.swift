@@ -103,7 +103,7 @@ struct ToolsTeleprompterView: View {
                         unit: String, scale: Double = 1) -> some View {
         HStack(spacing: 12) {
             Text(title).font(.callout).frame(width: 150, alignment: .leading)
-            Slider(value: value, in: range, step: step)
+            Slider(value: value.snapped(step), in: range)
             Text("\(Int((value.wrappedValue * scale).rounded())) \(unit)")
                 .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 .frame(width: 72, alignment: .trailing)
@@ -178,9 +178,10 @@ struct ToolsTeleprompterView: View {
             ForEach(Self.controls, id: \.0) { key, text in
                 HStack(spacing: 10) {
                     Text(key).font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .fixedSize()
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-                        .frame(width: 90, alignment: .leading)
+                        .frame(width: 120, alignment: .leading)
                     Text(text).font(.callout).foregroundStyle(.secondary)
                     Spacer(minLength: 0)
                 }

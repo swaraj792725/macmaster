@@ -284,6 +284,21 @@ private struct LauncherStatus {
         case .optimizer:
             if flag("mm.optimizer.auto") == true { return LauncherStatus(text: "Auto-optimize on", dot: .green) }
             return fallback
+        case .updates:
+            let u = AppUpdatesEngine.shared
+            if u.isChecking { return LauncherStatus(text: "Checking for updates…") }
+            guard u.lastChecked != nil else { return fallback }
+            let n = u.updateCount
+            return n == 0 ? LauncherStatus(text: "All apps up to date", dot: .green)
+                          : LauncherStatus(text: "\(n) update\(n == 1 ? "" : "s") available", dot: .orange)
+        case .sound:
+            let snd = SoundEngine.shared
+            if snd.micMuted { return LauncherStatus(text: "Mic muted", dot: .red) }
+            return snd.defaultOutput.map { LauncherStatus(text: $0.name) } ?? fallback
+        case .commandbar:
+            guard CommandBarPrefs.enabled else { return fallback }
+            let combo = StoredHotKey.load(CommandBarPrefs.hotKeyKey)?.display
+            return LauncherStatus(text: combo.map { "On · \($0)" } ?? "On", dot: .green)
         default:
             return fallback
         }

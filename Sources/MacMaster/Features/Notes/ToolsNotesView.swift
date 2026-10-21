@@ -82,7 +82,7 @@ struct ToolsNotesView: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
-                Text("Shortcut").font(.caption).foregroundStyle(.secondary)
+                Text("Shortcut").font(.caption).foregroundStyle(.secondary).fixedSize()
                 HotKeyField(defaultsKey: NotesPrefs.hotkey) { _ in engine.registerHotKey() }
             }
             Text("Stays on top of every app and Space. The shortcut shows and hides it.")
