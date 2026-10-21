@@ -129,6 +129,16 @@ enum Services {
         KeyboardEngine.shared.start()
         UpdateChecker.shared.start()
         PermissionWatcher.shared.start()
+        AppUpdatesEngine.shared.start()
+        SoundEngine.shared.start()
+        CaptureEngine.shared.start()
+        CommandBarEngine.shared.start()
+        TimerEngine.shared.start()
+        NotesEngine.shared.start()
+        TeleprompterEngine.shared.start()
+        PrivacyGuardEngine.shared.start()
+        DictationEngine.shared.start()
+        WindowExtrasEngine.shared.start()
         WhatsNewWindow.showIfUpdated()
     }
 }
@@ -201,7 +211,7 @@ struct AppSettingsView: View {
                 }
             }
             Section("Permissions") {
-                ForEach(Permission.allCases) { p in
+                ForEach(Permission.core) { p in
                     PermissionRow(permission: p)
                 }
             }

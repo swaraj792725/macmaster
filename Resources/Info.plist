@@ -26,6 +26,12 @@
 	<string>public.app-category.utilities</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dictation listens to you, and the Teleprompter can scroll while you speak. Audio stays on your Mac and is never saved.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Privacy Guard uses the camera to notice when you look away or someone looks over your shoulder. Frames are checked in memory and never saved or sent.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Dictation turns your speech into text, on your Mac where your language supports it.</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>MacMaster uses System Events to read login items and to run maintenance actions you choose.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>

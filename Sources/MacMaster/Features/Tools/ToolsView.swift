@@ -1,7 +1,8 @@
 import SwiftUI
 
 enum ToolsTool: String, CaseIterable, Identifiable {
-    case largeFiles, duplicates, startup, keepAwake, quickActions, clipboard, systemInfo
+    case largeFiles, duplicates, diskMap, startup, keepAwake, quickActions, clipboard
+    case timer, notes, teleprompter, dictation, privacyGuard, ports, systemInfo
     var id: String { rawValue }
 
     var title: String {
@@ -13,6 +14,13 @@ enum ToolsTool: String, CaseIterable, Identifiable {
         case .quickActions: "Quick Actions"
         case .clipboard: "Clipboard History"
         case .systemInfo: "System Info"
+        case .diskMap: "Disk Map"
+        case .ports: "Port Manager"
+        case .timer: "Timer & Stopwatch"
+        case .notes: "Notes"
+        case .teleprompter: "Teleprompter"
+        case .privacyGuard: "Privacy Guard"
+        case .dictation: "Dictation"
         }
     }
 
@@ -25,6 +33,13 @@ enum ToolsTool: String, CaseIterable, Identifiable {
         case .quickActions: "One-click fixes: flush DNS, restart Dock or Finder, rebuild indexes and more."
         case .clipboard: "Everything you copied recently, searchable and pinnable."
         case .systemInfo: "About This Mac on steroids: chip, memory, displays, battery and more."
+        case .diskMap: "See what fills your disk as a map you can click into."
+        case .ports: "Which apps listen on which ports, and stop them in one click."
+        case .timer: "Countdowns and a stopwatch in the menu bar, with alerts."
+        case .notes: "A quick scratchpad that floats over your work and saves itself."
+        case .teleprompter: "Read your script by the camera, hidden from screen sharing."
+        case .privacyGuard: "Blurs your screen when you look away or someone looks over your shoulder."
+        case .dictation: "Hold a key, speak, and the text lands where you type. Stays on your Mac."
         }
     }
 
@@ -37,6 +52,13 @@ enum ToolsTool: String, CaseIterable, Identifiable {
         case .quickActions: "bolt.fill"
         case .clipboard: "doc.on.clipboard"
         case .systemInfo: "info.circle"
+        case .diskMap: SymbolKit.firstAvailable(["square.grid.3x3.square", "square.grid.2x2.fill"])
+        case .ports: SymbolKit.firstAvailable(["network", "point.3.connected.trianglepath.dotted"])
+        case .timer: "timer"
+        case .notes: "note.text"
+        case .teleprompter: SymbolKit.firstAvailable(["text.alignleft", "text.justify"])
+        case .privacyGuard: SymbolKit.firstAvailable(["eye.trianglebadge.exclamationmark", "eye.slash.fill"])
+        case .dictation: "mic.fill"
         }
     }
 
@@ -49,6 +71,13 @@ enum ToolsTool: String, CaseIterable, Identifiable {
         case .quickActions: [Color(hex: 0x34D399), Color(hex: 0x059669)]
         case .clipboard: [Color(hex: 0x38BDF8), Color(hex: 0x0369A1)]
         case .systemInfo: [Color(hex: 0x94A3B8), Color(hex: 0x475569)]
+        case .diskMap: [Color(hex: 0x2DD4BF), Color(hex: 0x0F766E)]
+        case .ports: [Color(hex: 0x818CF8), Color(hex: 0x4338CA)]
+        case .timer: [Color(hex: 0xFB923C), Color(hex: 0xEA580C)]
+        case .notes: [Color(hex: 0xFDE047), Color(hex: 0xCA8A04)]
+        case .teleprompter: [Color(hex: 0xF472B6), Color(hex: 0xBE185D)]
+        case .privacyGuard: [Color(hex: 0x4ADE80), Color(hex: 0x15803D)]
+        case .dictation: [Color(hex: 0xF87171), Color(hex: 0xB91C1C)]
         }
     }
 }
@@ -113,6 +142,13 @@ struct ToolsView: View {
                 case .quickActions: ToolsQuickActionsView()
                 case .clipboard: ToolsClipboardView()
                 case .systemInfo: ToolsSystemInfoView()
+                case .diskMap: ToolsDiskMapView()
+                case .ports: ToolsPortsView()
+                case .timer: ToolsTimerView()
+                case .notes: ToolsNotesView()
+                case .teleprompter: ToolsTeleprompterView()
+                case .privacyGuard: ToolsPrivacyGuardView()
+                case .dictation: ToolsDictationView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

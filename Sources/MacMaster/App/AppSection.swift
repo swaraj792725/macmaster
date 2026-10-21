@@ -3,11 +3,11 @@ import SwiftUI
 enum AppSection: String, CaseIterable, Identifiable, Hashable {
     // Declared in sidebar order (the Go menu shortcuts follow this order). Raw values are persisted: never rename.
     case dashboard
-    case optimizer, cleaner, uninstaller
-    case stats, health, battery, power, wifi
+    case optimizer, cleaner, uninstaller, updates
+    case stats, health, battery, power, wifi, sound
     case mouse, keyboard, windows, tiling
     case menubar, controlcenter, clock
-    case tools, shelf
+    case commandbar, capture, tools, shelf
     case permissions
 
     var id: String { rawValue }
@@ -17,6 +17,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: "Dashboard"
         case .optimizer: "Optimizer"
         case .uninstaller: "Uninstaller"
+        case .updates: "App Updates"
+        case .sound: "Sound"
+        case .commandbar: "Command Bar"
+        case .capture: "Capture"
         case .cleaner: "Cleaner"
         case .battery: "Battery"
         case .power: "Power"
@@ -41,6 +45,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: "square.grid.2x2.fill"
         case .optimizer: SymbolKit.firstAvailable(["gauge.with.dots.needle.67percent", "speedometer"])
         case .uninstaller: "trash.fill"
+        case .updates: SymbolKit.firstAvailable(["arrow.down.app.fill", "arrow.down.circle.fill"])
+        case .sound: SymbolKit.firstAvailable(["speaker.wave.3.fill", "speaker.wave.2.fill"])
+        case .commandbar: SymbolKit.firstAvailable(["command.square.fill", "command"])
+        case .capture: SymbolKit.firstAvailable(["camera.viewfinder", "viewfinder"])
         case .cleaner: "sparkles"
         case .battery: SymbolKit.firstAvailable(["battery.100percent.bolt", "bolt.batteryblock.fill", "battery.100"])
         case .power: "power"
@@ -66,6 +74,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: "Overview of your Mac"
         case .optimizer: "Speed up memory, CPU, disk and startup"
         case .uninstaller: "Remove apps and their leftovers"
+        case .updates: "Updates for every app, in one list"
+        case .sound: "Output, input, device priority and mic mute"
+        case .commandbar: "Launch apps, actions and settings from anywhere"
+        case .capture: "Copy text, QR codes and colors from the screen"
         case .cleaner: "Free up space from caches and junk"
         case .battery: "Charge, health and power details"
         case .power: "Sleep, shutdown timers, energy and pmset"
@@ -90,6 +102,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: Theme.Palette.dashboard
         case .optimizer: Theme.Palette.yellow
         case .uninstaller: Theme.Palette.uninstaller
+        case .updates: Theme.Palette.blue
+        case .sound: Theme.Palette.pink
+        case .commandbar: Theme.Palette.gray
+        case .capture: Theme.Palette.purple
         case .cleaner: Theme.Palette.cleaner
         case .battery: Theme.Palette.battery
         case .power: Theme.Palette.red
@@ -112,11 +128,11 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     var group: AppGroup {
         switch self {
         case .dashboard: .overview
-        case .optimizer, .cleaner, .uninstaller: .clean
-        case .stats, .health, .battery, .power, .wifi: .monitor
+        case .optimizer, .cleaner, .uninstaller, .updates: .clean
+        case .stats, .health, .battery, .power, .wifi, .sound: .monitor
         case .mouse, .keyboard, .windows, .tiling: .input
         case .menubar, .controlcenter, .clock: .menubar
-        case .tools, .shelf: .utilities
+        case .commandbar, .capture, .tools, .shelf: .utilities
         case .permissions: .setup
         }
     }
@@ -127,6 +143,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
         case .dashboard: DashboardView()
         case .optimizer: OptimizerView()
         case .uninstaller: UninstallerView()
+        case .updates: AppUpdatesView()
+        case .sound: SoundView()
+        case .commandbar: CommandBarView()
+        case .capture: CaptureView()
         case .cleaner: CleanerView()
         case .battery: BatteryView()
         case .power: PowerView()

@@ -10,6 +10,9 @@ enum AppSearchIndex {
     static let appSettingsTab = "app-settings"
 
     static let settings: [SearchEntry] = optimizer + cleaner + uninstaller + monitor + input + menuBar + utilities + setup + app
+        + updatesEntries + soundEntries + captureEntries + commandBarEntries + diskMapEntries + portsEntries
+        + timerEntries + notesEntries + teleprompterEntries + privacyGuardEntries + dictationEntries
+        + windowExtrasEntries + clipboardExtrasEntries + devToolsEntries
 
     // MARK: Clean & Optimize
 
@@ -211,6 +214,13 @@ enum AppSearchIndex {
         SearchEntry(.tools, crumb: "Quick Actions", "Quick Actions", "flush dns restart dock finder rebuild spotlight", tab: "quickActions"),
         SearchEntry(.tools, crumb: "Clipboard History", "Clipboard History", "copied paste history pin", tab: "clipboard"),
         SearchEntry(.tools, crumb: "System Info", "System Info", "about this mac chip memory displays serial", tab: "systemInfo"),
+        SearchEntry(.tools, crumb: "Disk Map", "Disk Map", "treemap space lens disk usage folders sizes daisy", tab: "diskMap"),
+        SearchEntry(.tools, crumb: "Port Manager", "Port Manager", "ports listening lsof localhost server kill process dev", tab: "ports"),
+        SearchEntry(.tools, crumb: "Timer & Stopwatch", "Timer & Stopwatch", "countdown pomodoro alarm stopwatch lap", tab: "timer"),
+        SearchEntry(.tools, crumb: "Notes", "Notes", "scratchpad notepad sticky quick note todo checklist", tab: "notes"),
+        SearchEntry(.tools, crumb: "Teleprompter", "Teleprompter", "script prompter notch presentation video call read", tab: "teleprompter"),
+        SearchEntry(.tools, crumb: "Privacy Guard", "Privacy Guard", "shoulder surfing blur face detection camera look away", tab: "privacyGuard"),
+        SearchEntry(.tools, crumb: "Dictation", "Dictation", "speech to text voice typing whisper push to talk transcribe", tab: "dictation"),
 
         SearchEntry(.shelf, crumb: "Drop Shelf", "Enable Drop Shelf", "watch file drags"),
         SearchEntry(.shelf, crumb: "Menu bar", "Show Drop Shelf in menu bar", "item count badge"),

@@ -5,10 +5,17 @@ import CoreGraphics
 import UserNotifications
 import CoreLocation
 import EventKit
+import AVFoundation
+import Speech
 
 enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
     case accessibility, screenRecording, fullDiskAccess, notifications, location, calendars
+    case microphone, camera, speechRecognition
     var id: String { rawValue }
+
+    /// Shown in onboarding. The rest are asked for only when the user turns on a feature that needs them.
+    static let core: [Permission] = [.accessibility, .screenRecording, .fullDiskAccess, .notifications, .location, .calendars]
+    static let onDemand: [Permission] = [.microphone, .camera, .speechRecognition]
 
     var title: String {
         switch self {
@@ -18,6 +25,9 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .notifications: "Notifications"
         case .location: "Location"
         case .calendars: "Calendars"
+        case .microphone: "Microphone"
+        case .camera: "Camera"
+        case .speechRecognition: "Speech Recognition"
         }
     }
 
@@ -36,6 +46,12 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
             "macOS hides your Wi-Fi network name from apps unless Location is allowed. MacMaster only uses it to show the network name; your location is never read or stored."
         case .calendars:
             "Lets the Clock popover show your upcoming events, join links and a \"next event\" line. Events are read on demand from the calendars you already have in Calendar; nothing is changed, stored or sent anywhere."
+        case .microphone:
+            "Lets Dictation hear you and lets the Teleprompter scroll while you speak. Audio is processed on your Mac and never saved."
+        case .camera:
+            "Lets Privacy Guard notice when you look away or someone looks over your shoulder. Frames are checked in memory and never saved or sent."
+        case .speechRecognition:
+            "Lets Dictation turn your speech into text. MacMaster asks macOS to recognize speech on your Mac where your language supports it."
         }
     }
 
@@ -54,6 +70,12 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
             ["Wi-Fi network name", "Nearby networks list"]
         case .calendars:
             ["Clock popover events", "Next event in the menu bar"]
+        case .microphone:
+            ["Dictation", "Teleprompter voice scrolling"]
+        case .camera:
+            ["Privacy Guard"]
+        case .speechRecognition:
+            ["Dictation"]
         }
     }
 
@@ -66,6 +88,9 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .notifications: SymbolKit.firstAvailable(["bell.badge.fill", "bell.fill"])
         case .location: SymbolKit.firstAvailable(["location.fill", "location"])
         case .calendars: SymbolKit.firstAvailable(["calendar", "calendar.badge.clock"])
+        case .microphone: SymbolKit.firstAvailable(["mic.fill", "mic"])
+        case .camera: SymbolKit.firstAvailable(["camera.fill", "video.fill"])
+        case .speechRecognition: SymbolKit.firstAvailable(["waveform.badge.mic", "waveform"])
         }
     }
 
@@ -78,6 +103,9 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .notifications: Theme.Palette.red
         case .location: Theme.Palette.teal
         case .calendars: Theme.Palette.pink
+        case .microphone: Theme.Palette.orange
+        case .camera: Theme.Palette.green
+        case .speechRecognition: Theme.Palette.indigo
         }
     }
 
@@ -92,6 +120,7 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .notifications: Permissions.notificationsCanPrompt ? "Grant" : "Open Settings"
         case .location: Permissions.locationCanPrompt ? "Grant" : "Open Settings"
         case .calendars: Permissions.calendarsCanPrompt ? "Grant" : "Open Settings"
+        case .microphone, .camera, .speechRecognition: Permissions.mediaCanPrompt(self) ? "Grant" : "Open Settings"
         }
     }
 
@@ -104,6 +133,9 @@ enum Permission: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .notifications: return URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!
         case .location: return URL(string: base + "Privacy_LocationServices")!
         case .calendars: return URL(string: base + "Privacy_Calendars")!
+        case .microphone: return URL(string: base + "Privacy_Microphone")!
+        case .camera: return URL(string: base + "Privacy_Camera")!
+        case .speechRecognition: return URL(string: base + "Privacy_SpeechRecognition")!
         }
     }
 }
@@ -117,16 +149,53 @@ enum Permissions {
         case .notifications: return notificationState.granted
         case .location: return locationGranted
         case .calendars: return calendarsGranted
+        case .microphone: return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        case .camera: return AVCaptureDevice.authorizationStatus(for: .video) == .authorized
+        case .speechRecognition: return SFSpeechRecognizer.authorizationStatus() == .authorized
+        }
+    }
+
+    /// True while macOS has not asked yet, so a request shows the system prompt instead of needing Settings.
+    static func mediaCanPrompt(_ p: Permission) -> Bool {
+        switch p {
+        case .microphone: AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined
+        case .camera: AVCaptureDevice.authorizationStatus(for: .video) == .notDetermined
+        case .speechRecognition: SFSpeechRecognizer.authorizationStatus() == .notDetermined
+        default: false
+        }
+    }
+
+    /// Asks for microphone, camera or speech access. Calls back on the main queue with the result.
+    static func requestMedia(_ p: Permission, completion: (@MainActor @Sendable (Bool) -> Void)? = nil) {
+        func done(_ ok: Bool) {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    PermissionWatcher.shared.refreshSoon()
+                    completion?(ok)
+                }
+            }
+        }
+        guard mediaCanPrompt(p) else {
+            if !isGranted(p) { NSWorkspace.shared.open(p.settingsURL) }
+            done(isGranted(p))
+            return
+        }
+        switch p {
+        case .microphone: AVCaptureDevice.requestAccess(for: .audio) { done($0) }
+        case .camera: AVCaptureDevice.requestAccess(for: .video) { done($0) }
+        case .speechRecognition: SFSpeechRecognizer.requestAuthorization { done($0 == .authorized) }
+        default: done(isGranted(p))
         }
     }
 
     /// Number of permissions currently granted.
-    static var grantedCount: Int { Permission.allCases.filter(isGranted).count }
+    static var grantedCount: Int { Permission.core.filter(isGranted).count }
 
     static func request(_ p: Permission) {
         if p == .notifications { requestNotifications(); return }
         if p == .location { requestLocation(); return }
         if p == .calendars { requestCalendars(); return }
+        if Permission.onDemand.contains(p) { requestMedia(p); return }
         if !isGranted(p) { resetStaleEntry(p) }
         switch p {
         case .accessibility:
@@ -136,7 +205,7 @@ enum Permissions {
             if !CGRequestScreenCaptureAccess() { NSWorkspace.shared.open(p.settingsURL) }
         case .fullDiskAccess:
             NSWorkspace.shared.open(p.settingsURL)
-        case .notifications, .location, .calendars:
+        case .notifications, .location, .calendars, .microphone, .camera, .speechRecognition:
             break
         }
     }
@@ -156,7 +225,7 @@ enum Permissions {
         switch p {
         case .accessibility: service = "Accessibility"
         case .screenRecording: service = "ScreenCapture"
-        case .fullDiskAccess, .notifications, .location, .calendars: return   // can't be reset without admin rights / not TCC
+        case .fullDiskAccess, .notifications, .location, .calendars, .microphone, .camera, .speechRecognition: return   // can't be reset without admin rights / not TCC
         }
         guard let id = Bundle.main.bundleIdentifier else { return }
         let task = Process()

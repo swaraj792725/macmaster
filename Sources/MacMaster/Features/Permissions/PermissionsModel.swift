@@ -11,8 +11,9 @@ final class PermissionsModel {
     private var watcher: PermissionWatcher { .shared }
 
     var status: [Permission: Bool] { watcher.status }
-    var grantedCount: Int { Permission.allCases.filter(isGranted).count }
-    var total: Int { Permission.allCases.count }
+    /// Counts cover the core permissions; the on-demand ones (microphone, camera, speech) don't count as missing.
+    var grantedCount: Int { Permission.core.filter(isGranted).count }
+    var total: Int { Permission.core.count }
     func isGranted(_ p: Permission) -> Bool { watcher.isGranted(p) }
     var menuBarAllowed: Bool? { watcher.menuBarAllowed }
 

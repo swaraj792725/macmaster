@@ -113,7 +113,7 @@ struct OnboardingPermissionsStep: View {
                             subtitle: "\(model.grantedCount) of \(model.total) granted. You can change any of these later from the Permissions page.")
                 .contentTransition(.numericText())
             VStack(spacing: 8) {
-                ForEach(Permission.allCases) { p in
+                ForEach(Permission.core) { p in
                     PermissionsRow(permission: p, granted: model.isGranted(p), compact: true, note: model.note(for: p)) { model.request(p) }
                         .padding(.horizontal, 12).padding(.vertical, 9)
                         .card(padding: 0, kind: .glass, radius: Theme.Radius.medium)

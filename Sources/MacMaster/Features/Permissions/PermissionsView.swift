@@ -32,7 +32,19 @@ struct PermissionsView: View {
             menuBarRow.card().searchAnchor("perm.menuBar")
 
             VStack(spacing: Theme.spacing) {
-                ForEach(Permission.allCases) { p in
+                ForEach(Permission.core) { p in
+                    PermissionsRow(permission: p, granted: model.isGranted(p), note: model.note(for: p)) { model.request(p) }
+                        .card()
+                        .searchAnchor("perm.\(p.rawValue)")
+                }
+            }
+
+            SectionTitle(text: "Only when you use them", symbol: "hand.raised.fill")
+            Text("MacMaster asks for these the first time you turn on a feature that needs them. Leave them off if you don't use those features.")
+                .font(.callout).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: Theme.spacing) {
+                ForEach(Permission.onDemand) { p in
                     PermissionsRow(permission: p, granted: model.isGranted(p), note: model.note(for: p)) { model.request(p) }
                         .card()
                         .searchAnchor("perm.\(p.rawValue)")
